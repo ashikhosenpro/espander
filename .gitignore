@@ -1,0 +1,37 @@
+node_modules/
+dist/
+src-tauri/target/
+.vite/
+coverage/
+
+# Tauri/package artifacts
+src-tauri/target/
+src-tauri/target/**/*
+*.dmg
+*.msi
+*.exe
+*.AppImage
+*.deb
+*.rpm
+
+# Local app data and secrets
+.espander/
+**/.github_token
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+
+# OS/editor noise
+*.log
+.DS_Store
+**/.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# TypeScript build cache
+*.tsbuildinfo

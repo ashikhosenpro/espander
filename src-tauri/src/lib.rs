@@ -1,0 +1,90 @@
+pub mod commands;
+pub mod db;
+pub mod error;
+pub mod espanso;
+pub mod github;
+pub mod github_sync;
+pub mod sync;
+
+use db::database::Database;
+use db::settings::get_app_data_dir;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tracing_subscriber::fmt()
+        .with_env_filter("espander=debug")
+        .init();
+
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+
+    let data_dir = rt
+        .block_on(get_app_data_dir())
+        .unwrap_or_else(|_| std::path::PathBuf::from(".").join(".espander"));
+
+    let database = Database::new(data_dir.clone());
+    if let Err(e) = rt.block_on(database.init()) {
+        eprintln!("Failed to initialize database: {}", e);
+    }
+
+    if let Ok(settings) = rt.block_on(database.get_settings()) {
+        if !settings.espanso_auto_detected {
+            if let Ok(info) = rt.block_on(espanso::detector::detect_espanso()) {
+                if info.found {
+                    let patch = serde_json::json!({
+                        "espanso_path": info.path,
+                        "espanso_config_dir": info.config_dir,
+                        "espanso_auto_detected": true,
+                    });
+                    let _ = rt.block_on(database.update_settings(patch));
+                }
+            }
+        }
+    }
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(database)
+        .invoke_handler(tauri::generate_handler![
+            commands::snippets::get_snippets,
+            commands::snippets::create_snippet,
+            commands::snippets::update_snippet,
+            commands::snippets::delete_snippet,
+            commands::snippets::duplicate_snippet,
+            commands::snippets::toggle_favorite,
+            commands::snippets::bulk_delete_snippets,
+            commands::snippets::bulk_move_snippets,
+            commands::categories::get_categories,
+            commands::categories::create_category,
+            commands::categories::update_category,
+            commands::categories::reorder_categories,
+            commands::categories::delete_category,
+            commands::categories::move_snippets_and_delete_category,
+            commands::settings::get_settings,
+            commands::settings::update_settings,
+            commands::settings::open_browser,
+            commands::permissions::get_permission_status,
+            commands::permissions::open_permission_settings,
+            commands::espanso::detect_espanso,
+            commands::espanso::generate_yaml,
+            commands::espanso::reload_espanso,
+            commands::espanso::deploy_and_reload,
+            commands::sync::sync_now,
+            commands::sync::get_sync_status,
+            commands::sync::start_github_oauth,
+            commands::sync::poll_github_oauth,
+            commands::sync::test_github_connection,
+            commands::gsheet::validate_gsheet_url,
+            commands::gsheet::import_from_gsheet,
+            commands::backup::create_backup,
+            commands::backup::restore_backup,
+            commands::import_export::import_snippets,
+            commands::about::read_about_page,
+            commands::about::read_docs_page,
+            commands::import_export::export_snippets,
+            commands::updater::check_updates_and_announcements,
+            commands::updater::download_and_install_update,
+            commands::updater::fetch_notifications,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running Espander");
+}

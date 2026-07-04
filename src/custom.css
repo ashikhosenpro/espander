@@ -1,0 +1,94 @@
+/* ==========================================================================
+   Espander Centralized Custom Stylesheet
+   Use this file for global visual overrides, theme tweaks, and custom layouts.
+   ========================================================================== */
+
+:root {
+  /* Global Spacing and Sizing */
+  --header-height: 3.5rem;      /* 56px */
+  --sidebar-width: 15rem;       /* 240px */
+  --container-padding: 1.5rem;  /* 24px */
+  
+  /* Component Border Radii */
+  --radius-button: var(--radius);
+  --radius-card: 0.75rem;
+  --radius-input: 0.5rem;
+  --radius-dialog: 0.75rem;
+
+  /* Theme and Element Colors */
+  --color-primary-indigo: #6366f1;
+  --color-accent-purple: #8b5cf6;
+  --color-success-emerald: #10b981;
+  
+  /* Custom Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+}
+
+/* ==========================================================================
+   UI Overrides
+   Avoid editing Tailwind styles directly across multiple components. Place overrides here.
+   ========================================================================== */
+
+/* Custom Scrollbars */
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* Sidebar Custom Styling */
+.sidebar {
+  width: var(--sidebar-width);
+  background-color: hsl(var(--sidebar-background));
+  border-color: hsl(var(--sidebar-border));
+}
+
+.sidebar-nav-item {
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+/* Tables Layout & Styling */
+.snippet-table {
+  border-radius: var(--radius-card);
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--card));
+}
+
+.snippet-table-header {
+  background-color: hsl(var(--muted) / 0.3);
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.snippet-table-body > div {
+  transition: background-color var(--transition-fast);
+}
+
+/* Buttons Custom Styles */
+button, .btn {
+  border-radius: var(--radius-button);
+}
+
+/* Category Items in Settings & Sidebar */
+.category-item {
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+/* Dialogs & Overlay Styling */
+[role="dialog"] {
+  border-radius: var(--radius-dialog) !important;
+}
+
+/* Input Fields */
+input, textarea {
+  border-radius: var(--radius-input);
+}
+
+/* Category Drag & Drop Helpers */
+.dragging-active .category-item > * {
+  pointer-events: none;
+}
+

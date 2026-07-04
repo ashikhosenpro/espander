@@ -1,0 +1,12 @@
+{
+  "announcement": null,
+  "updater": {
+    "version": "0.1.0",
+    "release_date": "2026-07-04",
+    "release_notes": "Initial public release.",
+    "download_url": "https://github.com/ashikhosenpro/Expander/releases/download/v0.1.0/Espander_0.1.0_aarch64.dmg",
+    "macos_download_url": "https://github.com/ashikhosenpro/Expander/releases/download/v0.1.0/Espander_0.1.0_aarch64.dmg",
+    "windows_download_url": "https://github.com/ashikhosenpro/Expander/releases/download/v0.1.0/Espander_0.1.0_x64-setup.exe",
+    "github_releases_url": "https://github.com/ashikhosenpro/Expander/releases"
+  }
+}

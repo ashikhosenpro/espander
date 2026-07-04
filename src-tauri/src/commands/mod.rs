@@ -1,0 +1,11 @@
+pub mod about;
+pub mod backup;
+pub mod categories;
+pub mod espanso;
+pub mod gsheet;
+pub mod import_export;
+pub mod permissions;
+pub mod settings;
+pub mod snippets;
+pub mod sync;
+pub mod updater;

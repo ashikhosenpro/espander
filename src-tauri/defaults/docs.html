@@ -1,0 +1,112 @@
+<section class="espander-docs">
+  <style>
+    .espander-docs { color: #dbe4f0; font-family: system-ui, sans-serif; }
+    .espander-docs h1 { margin: 0 0 .35rem; font-size: 1.25rem; }
+    .espander-docs p { color: #9aa8bb; line-height: 1.65; }
+    .doc-tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin: 1rem 0; }
+    .doc-tabs label { border: 1px solid #334155; border-radius: .45rem; color: #cbd5e1; cursor: pointer; font-size: .78rem; padding: .45rem .65rem; }
+    .doc-panel { display: none; border-top: 1px solid #263244; padding-top: 1rem; }
+    .espander-docs input[type="radio"] { display: none; }
+    #doc-app:checked ~ .doc-tabs label[for="doc-app"],
+    #doc-local:checked ~ .doc-tabs label[for="doc-local"],
+    #doc-sheet:checked ~ .doc-tabs label[for="doc-sheet"],
+    #doc-github:checked ~ .doc-tabs label[for="doc-github"],
+    #doc-data:checked ~ .doc-tabs label[for="doc-data"],
+    #doc-help:checked ~ .doc-tabs label[for="doc-help"] { background: #4f46e5; border-color: #6366f1; color: white; }
+    #doc-app:checked ~ .panels #panel-app,
+    #doc-local:checked ~ .panels #panel-local,
+    #doc-sheet:checked ~ .panels #panel-sheet,
+    #doc-github:checked ~ .panels #panel-github,
+    #doc-data:checked ~ .panels #panel-data,
+    #doc-help:checked ~ .panels #panel-help { display: block; }
+    .doc-panel h2 { color: #f8fafc; font-size: 1rem; margin: 0 0 .65rem; }
+    .doc-panel ol, .doc-panel ul { color: #aebbd0; line-height: 1.7; padding-left: 1.25rem; }
+    .doc-panel code { background: #1e293b; border-radius: .25rem; color: #e2e8f0; padding: .1rem .3rem; }
+    .doc-note { background: rgba(79, 70, 229, .12); border: 1px solid rgba(99, 102, 241, .25); border-radius: .55rem; margin-top: .8rem; padding: .75rem; }
+  </style>
+
+  <h1>Espander Documentation</h1>
+  <p>Use Espander to manage Espanso snippets visually, then keep them local, import from Google Sheets, or sync two-way with GitHub YAML files.</p>
+
+  <input id="doc-app" name="doc-tab" type="radio" checked>
+  <input id="doc-local" name="doc-tab" type="radio">
+  <input id="doc-sheet" name="doc-tab" type="radio">
+  <input id="doc-github" name="doc-tab" type="radio">
+  <input id="doc-data" name="doc-tab" type="radio">
+  <input id="doc-help" name="doc-tab" type="radio">
+
+  <div class="doc-tabs">
+    <label for="doc-app">App Guide</label>
+    <label for="doc-local">Local</label>
+    <label for="doc-sheet">Google Sheets</label>
+    <label for="doc-github">GitHub</label>
+    <label for="doc-data">Import/Export</label>
+    <label for="doc-help">Troubleshooting</label>
+  </div>
+
+  <div class="panels">
+    <div id="panel-app" class="doc-panel">
+      <h2>App Guide</h2>
+      <ol>
+        <li>Create categories from Settings, then reorder them by dragging.</li>
+        <li>Click New Snippet, enter a trigger, replacement, and category.</li>
+        <li>Use the sidebar categories to filter snippets quickly.</li>
+        <li>After saving snippets, Espander can generate YAML and reload Espanso.</li>
+      </ol>
+      <div class="doc-note">Triggers normally start with a colon, for example <code>:sig</code> or <code>:email</code>.</div>
+    </div>
+
+    <div id="panel-local" class="doc-panel">
+      <h2>Local Provider</h2>
+      <ol>
+        <li>Go to Settings, choose Sync Provider: Local Only.</li>
+        <li>Manage snippets inside Espander. Data stays in <code>~/.espander/database</code>.</li>
+        <li>Set the Espanso path and config directory if auto-detect does not find them.</li>
+        <li>Use Export CSV/YAML for manual backup.</li>
+      </ol>
+    </div>
+
+    <div id="panel-sheet" class="doc-panel">
+      <h2>Google Sheets Provider</h2>
+      <ol>
+        <li>Create a Google Sheet with columns: <code>trigger</code>, <code>replace</code>, <code>category</code>, <code>description</code>.</li>
+        <li>Publish the sheet to the web as CSV from File, Share, Publish to web.</li>
+        <li>Copy the generated CSV link.</li>
+        <li>Paste it in Settings under Google Sheets connection, then Sync Now.</li>
+      </ol>
+      <div class="doc-note">Google Sheets import is one-way. Use GitHub for two-way read/write sync.</div>
+    </div>
+
+    <div id="panel-github" class="doc-panel">
+      <h2>GitHub Provider</h2>
+      <ol>
+        <li>Create a public or private GitHub repository for snippets.</li>
+        <li>Create a Fine-grained Personal Access Token from GitHub Settings.</li>
+        <li>Repository access: choose Only select repositories, then select your snippets repository.</li>
+        <li>Permissions: set Contents to Read and Write, Metadata to Read-only.</li>
+        <li>Paste the repository URL and token in Espander, test, connect, then Sync Now.</li>
+      </ol>
+      <div class="doc-note">Each YAML file inside <code>snippets/</code> becomes a category. For example <code>new.yml</code> becomes the New category.</div>
+    </div>
+
+    <div id="panel-data" class="doc-panel">
+      <h2>Import/Export</h2>
+      <ul>
+        <li>CSV export includes trigger, replacement, category, description, and tags.</li>
+        <li>YAML export keeps categories and snippets together in a portable backup.</li>
+        <li>YAML import also accepts Espanso-style files with a top-level <code>matches</code> list.</li>
+        <li>Missing categories are created automatically during import.</li>
+      </ul>
+    </div>
+
+    <div id="panel-help" class="doc-panel">
+      <h2>Troubleshooting</h2>
+      <ul>
+        <li>If snippets do not expand, verify Espanso is installed and running.</li>
+        <li>On macOS, enable Accessibility permission for the text expansion tool.</li>
+        <li>If GitHub sync fails, test the token and confirm Contents Read/Write permission.</li>
+        <li>If a new GitHub YAML file does not appear, click Sync Now and then Refresh if needed.</li>
+      </ul>
+    </div>
+  </div>
+</section>
