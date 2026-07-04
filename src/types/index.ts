@@ -141,6 +141,12 @@ export interface Notification {
   id: string;
   title: string;
   message: string;
+  html_content: string | null;
+  custom_css: string | null;
+  background_color: string | null;
+  text_color: string | null;
+  action_label: string | null;
+  action_url: string | null;
   type_name: string;
   active: boolean;
   start_date: string | null;

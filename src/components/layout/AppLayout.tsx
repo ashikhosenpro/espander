@@ -9,15 +9,17 @@ import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useUpdateStore } from "@/stores/useUpdateStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { readFooterSettings, registerAppInstall, type FooterSettings } from "@/lib/tauri";
 import {
   AlertTriangle,
   ExternalLink,
   Download,
   Github,
   Info,
+  X,
 } from "lucide-react";
 
 export function AppLayout() {
@@ -25,6 +27,12 @@ export function AppLayout() {
   const { settings, loadSettings } = useSettingsStore();
   const { announcement, announcementDismissed, dismissAnnouncement, checkUpdates } = useUpdateStore();
   const { activeNotification, dismissNotification, startPolling } = useNotificationStore();
+  const [footerSettings, setFooterSettings] = useState<FooterSettings>({
+    left_text: "Espander v0.1.0 · MIT License",
+    link_label: "GitHub",
+    link_url: "https://github.com/ashikhosenpro/Expander",
+    show_github_icon: true,
+  });
 
   useEffect(() => {
     loadSettings();
@@ -35,9 +43,33 @@ export function AppLayout() {
   }, [checkUpdates]);
 
   useEffect(() => {
+    readFooterSettings()
+      .then(setFooterSettings)
+      .catch((error) => console.error("Failed to load footer settings:", error));
+  }, []);
+
+  useEffect(() => {
     const cleanup = startPolling();
     return cleanup;
   }, [startPolling]);
+
+  useEffect(() => {
+    const deviceKey = "espander_device_id";
+    const pingKey = "espander_install_ping_date";
+    let deviceId = localStorage.getItem(deviceKey);
+
+    if (!deviceId) {
+      deviceId = crypto.randomUUID();
+      localStorage.setItem(deviceKey, deviceId);
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    if (localStorage.getItem(pingKey) !== today) {
+      registerAppInstall(deviceId)
+        .then(() => localStorage.setItem(pingKey, today))
+        .catch((error) => console.error("Failed to register app install:", error));
+    }
+  }, []);
 
   const espansoMissing = useMemo(() => {
     return !settings.espanso_auto_detected && !settings.espanso_path;
@@ -94,26 +126,69 @@ export function AppLayout() {
         <div className="app-content flex flex-1 flex-col min-w-0">
           <TopBar />
           {activeNotification && (
-            <div className={cn(
-              "flex items-center gap-3 px-4 py-2 border-b text-xs transition-all",
-              activeNotification.type_name === "success" && "bg-emerald-500/5 text-emerald-400 border-emerald-500/10",
-              activeNotification.type_name === "warning" && "bg-amber-500/5 text-amber-300 border-amber-500/10",
-              activeNotification.type_name === "error" && "bg-red-500/5 text-red-400 border-red-500/10",
-              activeNotification.type_name === "info" && "bg-indigo-500/5 text-indigo-400 border-indigo-500/10"
-            )}>
-              <Info className="h-3.5 w-3.5 flex-shrink-0" />
-              <div className="flex-1 truncate">
-                <span className="font-semibold mr-1.5">{activeNotification.title}</span>
-                <span className="text-muted-foreground">{activeNotification.message}</span>
-              </div>
-              {activeNotification.dismissible && (
-                <button
-                  onClick={() => dismissNotification(activeNotification.id)}
-                  className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded border border-border/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Dismiss
-                </button>
+            <div
+              className={cn(
+                "relative border-b px-4 py-3 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.16)]",
+                activeNotification.type_name === "success" && "border-emerald-500/25 bg-[linear-gradient(90deg,rgba(16,185,129,0.18),rgba(20,184,166,0.08),rgba(15,23,42,0.02))]",
+                activeNotification.type_name === "warning" && "border-amber-500/25 bg-[linear-gradient(90deg,rgba(245,158,11,0.18),rgba(251,191,36,0.08),rgba(15,23,42,0.02))]",
+                activeNotification.type_name === "error" && "border-red-500/25 bg-[linear-gradient(90deg,rgba(239,68,68,0.18),rgba(244,63,94,0.08),rgba(15,23,42,0.02))]",
+                activeNotification.type_name === "info" && "border-sky-500/25 bg-[linear-gradient(90deg,rgba(14,165,233,0.18),rgba(99,102,241,0.08),rgba(15,23,42,0.02))]"
               )}
+              style={{
+                background: activeNotification.background_color || undefined,
+                color: activeNotification.text_color || undefined,
+              }}
+            >
+              {activeNotification.custom_css && (
+                <style>{activeNotification.custom_css}</style>
+              )}
+              <div className="flex items-start gap-3">
+                <div className={cn(
+                  "mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border",
+                  activeNotification.type_name === "success" && "border-emerald-400/25 bg-emerald-400/10 text-emerald-300",
+                  activeNotification.type_name === "warning" && "border-amber-400/25 bg-amber-400/10 text-amber-300",
+                  activeNotification.type_name === "error" && "border-red-400/25 bg-red-400/10 text-red-300",
+                  activeNotification.type_name === "info" && "border-sky-400/25 bg-sky-400/10 text-sky-300"
+                )}>
+                  <Info className="h-4 w-4" />
+                </div>
+
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-semibold text-foreground">{activeNotification.title}</span>
+                    {activeNotification.action_url && activeNotification.action_label && (
+                      <a
+                        href={activeNotification.action_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/40 px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-background/70"
+                      >
+                        {activeNotification.action_label}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+
+                  {activeNotification.html_content ? (
+                    <div
+                      className="espander-rich-notification max-w-none text-muted-foreground [&_a]:font-medium [&_a]:text-sky-300 [&_a:hover]:text-sky-200 [&_b]:text-foreground [&_strong]:text-foreground [&_code]:rounded [&_code]:bg-background/50 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[11px] [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
+                      dangerouslySetInnerHTML={{ __html: activeNotification.html_content }}
+                    />
+                  ) : (
+                    <p className="truncate text-muted-foreground">{activeNotification.message}</p>
+                  )}
+                </div>
+
+                {activeNotification.dismissible && (
+                  <button
+                    onClick={() => dismissNotification(activeNotification.id)}
+                    className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/30 text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                    aria-label="Dismiss notification"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           )}
           <main className="app-main flex-1 overflow-y-auto scrollbar-thin">
@@ -121,18 +196,20 @@ export function AppLayout() {
           </main>
           <footer className="app-footer flex items-center justify-between px-4 py-2 border-t border-border bg-muted/20">
             <p className="text-[11px] text-muted-foreground/70">
-              Espander v0.1.0 &middot; MIT License
+              {footerSettings.left_text}
             </p>
-            <a
-              href="https://github.com/anomalyco/espander"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] text-muted-foreground/70 hover:text-foreground flex items-center gap-1.5 transition-colors"
-            >
-              <Github className="h-3 w-3" />
-              GitHub
-              <ExternalLink className="h-2.5 w-2.5" />
-            </a>
+            {footerSettings.link_url && footerSettings.link_label && (
+              <a
+                href={footerSettings.link_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-muted-foreground/70 hover:text-foreground flex items-center gap-1.5 transition-colors"
+              >
+                {footerSettings.show_github_icon && <Github className="h-3 w-3" />}
+                {footerSettings.link_label}
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            )}
           </footer>
         </div>
       </div>

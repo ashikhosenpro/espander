@@ -78,19 +78,49 @@ Use a fine-grained GitHub Personal Access Token with:
 
 Espander stores tokens in the operating system credential store when available. If that fails, it falls back to a local file under the user's `.espander` directory with owner-only permissions on Unix systems.
 
+## WordPress Control Hub
+
+Espander can read top-bar notifications, update metadata, documentation, and about content
+from a WordPress REST API. A small WordPress plugin is included at
+`wordpress/espander-notifications`.
+
+1. Upload `wordpress/espander-notifications` to your WordPress site's `wp-content/plugins/`
+   directory.
+2. Activate **Espander Control Hub** in the WordPress dashboard.
+3. Manage notifications, application updates, documentation, about content, and anonymous
+   install counts from **Espander Hub** in the WordPress admin menu.
+4. Build Espander with your WordPress notification endpoint:
+
+```bash
+ESPANDER_NOTIFICATIONS_URL="https://your-domain.com/wp-json/espander/v1/notifications" npm run tauri:build
+```
+
+For local development you can run Tauri with the same environment variable:
+
+```bash
+ESPANDER_NOTIFICATIONS_URL="https://your-domain.com/wp-json/espander/v1/notifications" npm run tauri:dev
+```
+
+The endpoint only exposes published notification data for the app to read. Creating,
+editing, deleting, update publishing, documentation editing, and stats overview stay inside
+the WordPress dashboard and require a WordPress admin account.
+
+When `ESPANDER_NOTIFICATIONS_URL` is set, Espander automatically derives related endpoints:
+
+- Updates: `/wp-json/espander/v1/update`
+- Documentation: `/wp-json/espander/v1/content/docs`
+- About: `/wp-json/espander/v1/content/about`
+- Footer: `/wp-json/espander/v1/content/footer`
+- Anonymous install telemetry: `/wp-json/espander/v1/telemetry`
+
 ## Release Metadata
 
-The app can read update and notification metadata from:
-
-- `espander-update.json`
-- `espander-notifications.json`
-
-Templates are included in this repository. For safety, automatic update downloads are restricted to official GitHub Release asset URLs under `https://github.com/ashikhosenpro/Expander/releases/download/`.
+For safety, automatic update downloads are restricted to official GitHub Release asset URLs under `https://github.com/ashikhosenpro/Expander/releases/download/`.
 
 ## Releasing
 
 1. Update versions in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
-2. Update `espander-update.json` with the release notes and download URLs.
+2. Publish the GitHub Release and update release notes/download URLs if your update metadata flow uses them.
 3. Commit the changes.
 4. Create and push a tag, for example:
 

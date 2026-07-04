@@ -33,14 +33,19 @@ pub struct UpdateResponse {
 #[tauri::command]
 pub async fn check_updates_and_announcements() -> Result<UpdateResponse, EspanderError> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let Some(url) = updates_endpoint_url() else {
+        return Ok(UpdateResponse {
+            announcement: None,
+            updater: None,
+            current_version,
+        });
+    };
+
     let client = reqwest::Client::builder()
         .user_agent("Espander/0.1.0")
         .timeout(std::time::Duration::from_secs(5))
         .build()
         .map_err(|e| EspanderError::Other(format!("HTTP client error: {}", e)))?;
-
-    // Hosted JSON endpoint containing announcements and latest update details
-    let url = "https://raw.githubusercontent.com/ashikhosenpro/Expander/main/espander-update.json";
 
     match client.get(url).send().await {
         Ok(resp) => {
@@ -95,10 +100,9 @@ fn platform_download_url(updater: &UpdaterInfo) -> String {
 
 #[tauri::command]
 pub async fn download_and_install_update(download_url: String) -> Result<String, EspanderError> {
-    if !download_url.starts_with("https://github.com/ashikhosenpro/Expander/releases/download/") {
+    if !is_allowed_update_download(&download_url) {
         return Err(EspanderError::Other(
-            "Update downloads are only allowed from the official GitHub Releases assets."
-                .to_string(),
+            "Update downloads are only allowed from the official release host.".to_string(),
         ));
     }
 
@@ -176,6 +180,18 @@ pub struct Notification {
     pub id: String,
     pub title: String,
     pub message: String,
+    #[serde(default)]
+    pub html_content: Option<String>,
+    #[serde(default)]
+    pub custom_css: Option<String>,
+    #[serde(default)]
+    pub background_color: Option<String>,
+    #[serde(default)]
+    pub text_color: Option<String>,
+    #[serde(default)]
+    pub action_label: Option<String>,
+    #[serde(default)]
+    pub action_url: Option<String>,
     pub type_name: String, // "info", "success", "warning", "error"
     pub active: bool,
     pub start_date: Option<String>,
@@ -190,17 +206,24 @@ pub struct NotificationsResponse {
     pub notifications: Vec<Notification>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeviceRegistration {
+    pub device_id: String,
+}
+
 #[tauri::command]
 pub async fn fetch_notifications() -> Result<NotificationsResponse, EspanderError> {
+    let Some(url) = notifications_endpoint_url() else {
+        return Ok(NotificationsResponse {
+            notifications: Vec::new(),
+        });
+    };
+
     let client = reqwest::Client::builder()
         .user_agent("Espander/0.1.0")
         .timeout(std::time::Duration::from_secs(5))
         .build()
         .map_err(|e| EspanderError::Other(format!("HTTP client error: {}", e)))?;
-
-    // Centralized JSON hosted on GitHub for remote notification control
-    let url =
-        "https://raw.githubusercontent.com/ashikhosenpro/Expander/main/espander-notifications.json";
 
     match client.get(url).send().await {
         Ok(resp) => {
@@ -217,4 +240,84 @@ pub async fn fetch_notifications() -> Result<NotificationsResponse, EspanderErro
             notifications: Vec::new(),
         }),
     }
+}
+
+fn notifications_endpoint_url() -> Option<String> {
+    std::env::var("ESPANDER_NOTIFICATIONS_URL")
+        .ok()
+        .or_else(|| option_env!("ESPANDER_NOTIFICATIONS_URL").map(str::to_string))
+        .map(|url| url.trim().to_string())
+        .filter(|url| !url.is_empty())
+}
+
+fn updates_endpoint_url() -> Option<String> {
+    std::env::var("ESPANDER_UPDATES_URL")
+        .ok()
+        .or_else(|| option_env!("ESPANDER_UPDATES_URL").map(str::to_string))
+        .map(|url| url.trim().to_string())
+        .filter(|url| !url.is_empty())
+        .or_else(|| {
+            notifications_endpoint_url()
+                .and_then(|url| url.strip_suffix("/notifications").map(str::to_string))
+                .map(|base| format!("{}/update", base))
+        })
+}
+
+fn is_allowed_update_download(download_url: &str) -> bool {
+    if download_url.starts_with("https://github.com/ashikhosenpro/Expander/releases/download/") {
+        return true;
+    }
+
+    let Ok(download) = reqwest::Url::parse(download_url) else {
+        return false;
+    };
+
+    if download.scheme() != "https" {
+        return false;
+    }
+
+    let Some(update_url) = updates_endpoint_url() else {
+        return false;
+    };
+
+    let Ok(update_endpoint) = reqwest::Url::parse(&update_url) else {
+        return false;
+    };
+
+    download.domain() == update_endpoint.domain()
+}
+
+#[tauri::command]
+pub async fn register_app_install(device_id: String) -> Result<(), EspanderError> {
+    let Some(url) = telemetry_endpoint_url() else {
+        return Ok(());
+    };
+
+    let client = reqwest::Client::builder()
+        .user_agent("Espander/0.1.0")
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| EspanderError::Other(format!("HTTP client error: {}", e)))?;
+
+    let payload = serde_json::json!({
+        "device_id": device_id,
+        "platform": std::env::consts::OS,
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+
+    let _ = client.post(url).json(&payload).send().await;
+    Ok(())
+}
+
+fn telemetry_endpoint_url() -> Option<String> {
+    std::env::var("ESPANDER_TELEMETRY_URL")
+        .ok()
+        .or_else(|| option_env!("ESPANDER_TELEMETRY_URL").map(str::to_string))
+        .map(|url| url.trim().to_string())
+        .filter(|url| !url.is_empty())
+        .or_else(|| {
+            notifications_endpoint_url()
+                .and_then(|url| url.strip_suffix("/notifications").map(str::to_string))
+                .map(|base| format!("{}/telemetry", base))
+        })
 }

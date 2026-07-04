@@ -80,10 +80,12 @@ pub fn run() {
             commands::import_export::import_snippets,
             commands::about::read_about_page,
             commands::about::read_docs_page,
+            commands::about::read_footer_settings,
             commands::import_export::export_snippets,
             commands::updater::check_updates_and_announcements,
             commands::updater::download_and_install_update,
             commands::updater::fetch_notifications,
+            commands::updater::register_app_install,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Espander");
