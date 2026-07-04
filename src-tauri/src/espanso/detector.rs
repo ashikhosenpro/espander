@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use tokio::process::Command;
 
 use crate::db::schema::EspansoInfo;
 use crate::error::EspanderError;
@@ -35,14 +34,13 @@ pub async fn detect_espanso() -> Result<EspansoInfo, EspanderError> {
 
 async fn try_detect() -> Result<EspansoInfo, EspanderError> {
     let path = find_espanso_binary().await?;
-    let version = get_version(&path).await.ok();
-    let config_dir = get_config_dir(&path).await.ok();
+    let config_dir = get_config_dir();
 
     Ok(EspansoInfo {
         found: true,
         path: Some(path.to_string_lossy().to_string()),
         config_dir: config_dir.map(|p| p.to_string_lossy().to_string()),
-        version,
+        version: None,
     })
 }
 
@@ -64,22 +62,16 @@ async fn find_espanso_binary() -> Result<PathBuf, EspanderError> {
         }
     }
 
-    let lookup_command = if cfg!(target_os = "windows") {
-        "where"
-    } else {
-        "which"
-    };
-
-    let output = Command::new(lookup_command)
-        .arg("espanso")
-        .output()
-        .await
-        .map_err(|_| EspanderError::EspansoNotFound("espanso not found in PATH".to_string()))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if let Some(path_str) = stdout.lines().find(|line| !line.trim().is_empty()) {
-            return Ok(PathBuf::from(path_str.trim()));
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let candidate = if cfg!(target_os = "windows") {
+                dir.join("espanso.exe")
+            } else {
+                dir.join("espanso")
+            };
+            if candidate.exists() {
+                return Ok(candidate);
+            }
         }
     }
 
@@ -88,55 +80,31 @@ async fn find_espanso_binary() -> Result<PathBuf, EspanderError> {
     ))
 }
 
-async fn get_version(path: &PathBuf) -> Result<String, EspanderError> {
-    let output = Command::new(path).arg("--version").output().await?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-        Err(EspanderError::EspansoNotFound(
-            "failed to get version".to_string(),
-        ))
+pub fn get_config_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        return std::env::var("HOME")
+            .ok()
+            .map(|home| PathBuf::from(home).join("Library/Application Support/espanso"));
     }
-}
 
-pub async fn get_config_dir(path: &PathBuf) -> Result<PathBuf, EspanderError> {
-    let output = Command::new(path).arg("path").output().await?;
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        for line in stdout.lines() {
-            if line.starts_with("Config:") {
-                let dir = line.trim_start_matches("Config:").trim();
-                return Ok(PathBuf::from(dir));
-            }
-        }
-        // Fallback: common paths
-        #[cfg(target_os = "macos")]
-        {
-            let home = std::env::var("HOME").unwrap_or_default();
-            let path = PathBuf::from(format!("{}/Library/Application Support/espanso", home));
-            if path.join("match").exists() && path.join("config").exists() {
-                return Ok(path);
-            }
-        }
-        #[cfg(target_os = "windows")]
-        {
-            if let Ok(app_data) = std::env::var("APPDATA") {
-                let path = PathBuf::from(app_data).join("espanso");
-                if path.exists() || !stdout.trim().contains('/') {
-                    return Ok(path);
-                }
-            }
-        }
-        Ok(PathBuf::from(stdout.trim()))
-    } else {
-        #[cfg(target_os = "windows")]
-        {
-            if let Ok(app_data) = std::env::var("APPDATA") {
-                return Ok(PathBuf::from(app_data).join("espanso"));
-            }
-        }
-        Err(EspanderError::EspansoNotFound(
-            "failed to get config dir".to_string(),
-        ))
+    #[cfg(target_os = "windows")]
+    {
+        return std::env::var("APPDATA")
+            .ok()
+            .map(|app_data| PathBuf::from(app_data).join("espanso"));
     }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
+            return Some(PathBuf::from(config_home).join("espanso"));
+        }
+        return std::env::var("HOME")
+            .ok()
+            .map(|home| PathBuf::from(home).join(".config/espanso"));
+    }
+
+    #[allow(unreachable_code)]
+    None
 }

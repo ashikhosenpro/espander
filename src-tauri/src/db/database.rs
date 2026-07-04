@@ -60,7 +60,7 @@ impl Database {
                 "sync_provider": "local",
                 "sync_interval_minutes": 60,
                 "auto_sync": true,
-                "auto_reload": true,
+                "auto_reload": false,
                 "first_launch_complete": false,
             });
             fs::write(

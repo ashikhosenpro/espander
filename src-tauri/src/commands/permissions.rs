@@ -59,30 +59,13 @@ pub async fn get_permission_status(
         required: true,
     });
 
-    #[cfg(target_os = "macos")]
     checks.push(PermissionCheck {
-        id: "macos_accessibility".to_string(),
-        title: "macOS Accessibility".to_string(),
-        description: "Required by text expansion tools so snippets can be typed into other apps."
-            .to_string(),
-        status: if macos_accessibility_granted() {
-            "granted"
-        } else {
-            "missing"
-        }
-        .to_string(),
-        action_label: Some("Open Accessibility Settings".to_string()),
-        required: true,
-    });
-
-    #[cfg(target_os = "windows")]
-    checks.push(PermissionCheck {
-        id: "windows_startup_apps".to_string(),
-        title: "Windows startup apps".to_string(),
-        description: "Enable Espander and Espanso at startup so snippets are available after sign-in."
+        id: "startup_app".to_string(),
+        title: "Start as startup app".to_string(),
+        description: "Optional. Open system startup settings so you can choose whether Espander starts when your computer starts."
             .to_string(),
         status: "manual".to_string(),
-        action_label: Some("Open Startup Apps".to_string()),
+        action_label: Some("Open".to_string()),
         required: false,
     });
 
@@ -91,140 +74,34 @@ pub async fn get_permission_status(
 
 #[tauri::command]
 pub fn open_permission_settings(permission_id: String) -> Result<(), EspanderError> {
+    if permission_id != "startup_app" {
+        return Ok(());
+    }
+
     #[cfg(target_os = "macos")]
     {
-        let url = match permission_id.as_str() {
-            "macos_accessibility" => {
-                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-            }
-            "macos_full_disk_access" => {
-                "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
-            }
-            _ => "x-apple.systempreferences:com.apple.preference.security",
-        };
-
-        std::process::Command::new("open").arg(url).spawn()?;
-        return Ok(());
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.LoginItems-Settings.extension")
+            .spawn()?;
     }
 
     #[cfg(target_os = "windows")]
     {
-        let uri = match permission_id.as_str() {
-            "windows_startup_apps" => {
-                let _ = ensure_espander_startup_shortcut();
-                let _ = ensure_espanso_startup_shortcut();
-                "ms-settings:startupapps"
-            }
-            "windows_notifications" => "ms-settings:notifications",
-            _ => "ms-settings:privacy",
-        };
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
 
         std::process::Command::new("cmd")
-            .args(["/C", "start", "", uri])
+            .args(["/C", "start", "", "ms-settings:startupapps"])
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()?;
-        return Ok(());
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
     {
         let _ = permission_id;
-        Ok(())
     }
-}
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-#[cfg(target_os = "windows")]
-fn ensure_espander_startup_shortcut() -> Result<(), EspanderError> {
-    let exe_path = std::env::current_exe()?;
-    let exe_path = exe_path.to_string_lossy().to_string();
-    let script = format!(
-        "$startup=[Environment]::GetFolderPath('Startup'); \
-         $shortcut=Join-Path $startup 'Espander.lnk'; \
-         $shell=New-Object -ComObject WScript.Shell; \
-         $lnk=$shell.CreateShortcut($shortcut); \
-         $lnk.TargetPath={}; \
-         $lnk.WorkingDirectory=Split-Path {}; \
-         $lnk.IconLocation={}; \
-         $lnk.Save();",
-        powershell_quote(&exe_path),
-        powershell_quote(&exe_path),
-        powershell_quote(&format!("{},0", exe_path))
-    );
-
-    std::process::Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status()?;
 
     Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn ensure_espanso_startup_shortcut() -> Result<(), EspanderError> {
-    let Some(espanso_path) = find_espanso_binary_sync() else {
-        return Ok(());
-    };
-
-    let script = format!(
-        "$startup=[Environment]::GetFolderPath('Startup'); \
-         $shortcut=Join-Path $startup 'Espanso.lnk'; \
-         $shell=New-Object -ComObject WScript.Shell; \
-         $lnk=$shell.CreateShortcut($shortcut); \
-         $lnk.TargetPath={}; \
-         $lnk.WorkingDirectory=Split-Path {}; \
-         $lnk.Save();",
-        powershell_quote(&espanso_path),
-        powershell_quote(&espanso_path)
-    );
-
-    std::process::Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status()?;
-
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn find_espanso_binary_sync() -> Option<String> {
-    let mut candidates = vec![
-        r"C:\Program Files\espanso\bin\espanso.exe".to_string(),
-        r"C:\Program Files (x86)\espanso\bin\espanso.exe".to_string(),
-    ];
-
-    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        candidates.push(format!(r"{}\espanso\bin\espanso.exe", local_app_data));
-    }
-
-    for candidate in candidates {
-        if std::path::Path::new(&candidate).exists() {
-            return Some(candidate);
-        }
-    }
-
-    let output = std::process::Command::new("where").arg("espanso").output().ok()?;
-    if output.status.success() {
-        let first = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .next()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(str::to_string);
-        return first;
-    }
-
-    None
-}
-
-#[cfg(target_os = "windows")]
-fn powershell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn espanso_config_status(config_dir: Option<&str>) -> String {
@@ -252,15 +129,4 @@ fn can_write_dir(path: &std::path::Path) -> bool {
         }
         Err(_) => false,
     }
-}
-
-#[cfg(target_os = "macos")]
-#[link(name = "ApplicationServices", kind = "framework")]
-extern "C" {
-    fn AXIsProcessTrusted() -> bool;
-}
-
-#[cfg(target_os = "macos")]
-fn macos_accessibility_granted() -> bool {
-    unsafe { AXIsProcessTrusted() }
 }

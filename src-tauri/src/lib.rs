@@ -129,7 +129,6 @@ pub fn run() {
             commands::permissions::open_permission_settings,
             commands::espanso::detect_espanso,
             commands::espanso::generate_yaml,
-            commands::espanso::reload_espanso,
             commands::espanso::deploy_and_reload,
             commands::sync::sync_now,
             commands::sync::get_sync_status,

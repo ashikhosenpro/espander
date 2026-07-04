@@ -59,7 +59,6 @@ export const openPermissionSettings = (permissionId: string) =>
 // Espanso
 export const detectEspanso = () => invoke<EspansoInfo>("detect_espanso");
 export const generateYaml = () => invoke<void>("generate_yaml");
-export const reloadEspanso = () => invoke<void>("reload_espanso");
 export const deployAndReload = () => invoke<void>("deploy_and_reload");
 
 // Sync

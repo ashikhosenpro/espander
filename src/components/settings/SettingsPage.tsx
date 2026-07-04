@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -25,12 +24,12 @@ import { useCategoryStore } from "@/stores/useCategoryStore";
 import { useSnippetStore } from "@/stores/useSnippetStore";
 import {
   getPermissionStatus,
-  openPermissionSettings,
   importSnippets,
   exportSnippets,
   readAboutPage,
   readDocsPage,
   openBrowser,
+  openPermissionSettings,
   testGithubConnection,
 } from "@/lib/tauri";
 import type { PermissionCheck } from "@/types";
@@ -457,7 +456,7 @@ export function SettingsPage() {
                         {permission.description}
                       </p>
                     </div>
-                    {permission.action_label && !granted && (
+                    {permission.action_label && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -467,7 +466,7 @@ export function SettingsPage() {
                         }}
                       >
                         <ExternalLink className="h-3 w-3" />
-                        Open
+                        {permission.action_label}
                       </Button>
                     )}
                   </div>
@@ -695,22 +694,6 @@ export function SettingsPage() {
               </p>
             </div>
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Auto Reload</Label>
-                <p className="text-xs text-muted-foreground/70">
-                  Automatically reload Espanso after snippet changes
-                </p>
-              </div>
-              <Switch
-                checked={settings.auto_reload}
-                onCheckedChange={(checked) =>
-                  updateSettings({ auto_reload: checked })
-                }
-              />
-            </div>
           </div>
         </TabsContent>
 

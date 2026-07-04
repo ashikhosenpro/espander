@@ -2,10 +2,35 @@ use crate::db::database::Database;
 use crate::db::schema::EspansoInfo;
 use crate::error::EspanderError;
 use crate::espanso::detector;
-use crate::espanso::reloader;
 use crate::espanso::yaml_generator;
-use std::path::PathBuf;
 use tauri::State;
+
+#[derive(Debug, Clone)]
+pub struct DeployOutcome {
+    pub created: usize,
+    pub updated: usize,
+    pub unchanged: usize,
+    pub removed: usize,
+}
+
+impl DeployOutcome {
+    pub fn changed_count(&self) -> usize {
+        self.created + self.updated + self.removed
+    }
+
+    pub fn message(&self, prefix: &str) -> String {
+        let base = if self.changed_count() == 0 {
+            format!("{prefix} Already synced with Espanso.")
+        } else {
+            format!(
+                "{prefix} Synced with Espanso: {} created, {} updated, {} removed.",
+                self.created, self.updated, self.removed
+            )
+        };
+
+        base
+    }
+}
 
 #[tauri::command]
 pub async fn detect_espanso() -> Result<EspansoInfo, EspanderError> {
@@ -29,18 +54,8 @@ pub async fn generate_yaml(db: State<'_, Database>) -> Result<(), EspanderError>
 }
 
 #[tauri::command]
-pub async fn reload_espanso() -> Result<(), EspanderError> {
-    let settings = crate::db::settings::get_settings_from_path().await?;
-    if let Some(path) = settings.espanso_path {
-        let espanso_path = PathBuf::from(&path);
-        reloader::reload_espanso(&espanso_path).await?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn deploy_and_reload(db: State<'_, Database>) -> Result<(), EspanderError> {
-    deploy_and_reload_inner(&db).await
+    deploy_and_reload_inner(&db).await.map(|_| ())
 }
 
 #[cfg(test)]
@@ -188,7 +203,7 @@ mod tests {
 }
 
 /// Helper: generate YAML, deploy to Espanso, reload. Used by CRUD commands.
-pub async fn deploy_and_reload_inner(db: &Database) -> Result<(), EspanderError> {
+pub async fn deploy_and_reload_inner(db: &Database) -> Result<DeployOutcome, EspanderError> {
     let snippets = db.get_snippets().await?;
 
     // Generate YAML files
@@ -219,16 +234,15 @@ pub async fn deploy_and_reload_inner(db: &Database) -> Result<(), EspanderError>
     }
 
     if let Some(config_dir) = settings.espanso_config_dir.clone() {
-        let config_dir = PathBuf::from(&config_dir);
-        reloader::deploy_yaml_to_espanso(&db.yaml_dir, &config_dir).await?;
+        let config_dir = std::path::PathBuf::from(&config_dir);
+        let stats = crate::espanso::reloader::deploy_yaml_to_espanso(&db.yaml_dir, &config_dir).await?;
 
-        if settings.auto_reload {
-            let Some(espanso_path) = settings.espanso_path.clone() else {
-                return Ok(());
-            };
-            let espanso_path = PathBuf::from(&espanso_path);
-            reloader::reload_espanso(&espanso_path).await?;
-        }
+        return Ok(DeployOutcome {
+            created: stats.created,
+            updated: stats.updated,
+            unchanged: stats.unchanged,
+            removed: stats.removed,
+        });
     } else {
         return Err(EspanderError::EspansoNotFound(
             "Espanso config folder was not found. Open Settings and set the Espanso config path."
@@ -236,5 +250,4 @@ pub async fn deploy_and_reload_inner(db: &Database) -> Result<(), EspanderError>
         ));
     }
 
-    Ok(())
 }

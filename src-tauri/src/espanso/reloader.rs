@@ -1,40 +1,14 @@
 use std::collections::HashSet;
 use std::path::Path;
-use tokio::process::Command;
 
 use crate::error::EspanderError;
 
-pub async fn reload_espanso(espanso_path: &Path) -> Result<(), EspanderError> {
-    if !espanso_path.exists() {
-        return Err(EspanderError::EspansoNotFound(
-            espanso_path.display().to_string(),
-        ));
-    }
-    if !espanso_path.is_file() {
-        return Err(EspanderError::Other(format!(
-            "Espanso path is not a file: {}",
-            espanso_path.display()
-        )));
-    }
-    eprintln!(
-        "[espander] reload_espanso: running {} cmd restart",
-        espanso_path.display()
-    );
-    let output = Command::new(espanso_path)
-        .arg("cmd")
-        .arg("restart")
-        .output()
-        .await
-        .map_err(|e| EspanderError::EspansoReloadFailed(e.to_string()))?;
-
-    if output.status.success() {
-        eprintln!("[espander] reload_espanso: success");
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!("[espander] reload_espanso: failed: {}", stderr);
-        Err(EspanderError::EspansoReloadFailed(stderr.to_string()))
-    }
+#[derive(Debug, Clone, Default)]
+pub struct DeployStats {
+    pub created: usize,
+    pub updated: usize,
+    pub unchanged: usize,
+    pub removed: usize,
 }
 
 /// Copy YAML files from yaml_dir to espanso_config_dir/match/espander/.
@@ -42,9 +16,10 @@ pub async fn reload_espanso(espanso_path: &Path) -> Result<(), EspanderError> {
 pub async fn deploy_yaml_to_espanso(
     yaml_dir: &Path,
     espanso_config_dir: &Path,
-) -> Result<(), EspanderError> {
+) -> Result<DeployStats, EspanderError> {
     let target_dir = espanso_config_dir.join("match").join("espander");
     tokio::fs::create_dir_all(&target_dir).await?;
+    let mut stats = DeployStats::default();
 
     eprintln!(
         "[espander] deploy_yaml_to_espanso: from {} to {}",
@@ -64,9 +39,21 @@ pub async fn deploy_yaml_to_espanso(
             let filename = path.file_name().unwrap().to_string_lossy().to_string();
             let target_path = target_dir.join(&filename);
 
+            let source_bytes = tokio::fs::read(&path).await?;
+            if let Ok(target_bytes) = tokio::fs::read(&target_path).await {
+                if target_bytes == source_bytes {
+                    stats.unchanged += 1;
+                    source_files.insert(filename);
+                    continue;
+                }
+                stats.updated += 1;
+            } else {
+                stats.created += 1;
+            }
+
             // Atomic write: write to a temp file, then rename
             let tmp_path = target_dir.join(format!(".{}.tmp", filename));
-            tokio::fs::copy(&path, &tmp_path).await?;
+            tokio::fs::write(&tmp_path, source_bytes).await?;
             tokio::fs::rename(&tmp_path, &target_path).await?;
 
             eprintln!("[espander]   deployed: {}", filename);
@@ -85,10 +72,11 @@ pub async fn deploy_yaml_to_espanso(
             let filename = path.file_name().unwrap().to_string_lossy().to_string();
             if !source_files.contains(&filename) {
                 tokio::fs::remove_file(&path).await?;
+                stats.removed += 1;
                 eprintln!("[espander]   removed orphan: {}", filename);
             }
         }
     }
 
-    Ok(())
+    Ok(stats)
 }

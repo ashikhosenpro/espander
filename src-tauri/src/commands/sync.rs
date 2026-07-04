@@ -12,13 +12,13 @@ pub async fn sync_now(db: State<'_, Database>) -> Result<SyncResult, EspanderErr
 
     match provider_type.as_str() {
         "local" => {
-            crate::commands::espanso::deploy_and_reload_inner(&db).await?;
+            let deploy = crate::commands::espanso::deploy_and_reload_inner(&db).await?;
             Ok(SyncResult {
                 success: true,
                 snippets_pulled: 0,
                 snippets_pushed: 0,
                 conflicts: 0,
-                message: "Local snippets deployed to Espanso.".to_string(),
+                message: deploy.message("Local mode:"),
             })
         }
         "gsheet" => {
@@ -48,7 +48,21 @@ pub async fn sync_now(db: State<'_, Database>) -> Result<SyncResult, EspanderErr
 
             match result_res {
                 Ok(result) => {
-                    crate::commands::espanso::deploy_and_reload_inner(&db).await?;
+                    let deploy = crate::commands::espanso::deploy_and_reload_inner(&db).await?;
+                    let import_message = if result.imported == 0 {
+                        "Everything is already synchronized. No new snippets were found."
+                            .to_string()
+                    } else {
+                        format!(
+                            "Imported {} snippets{}",
+                            result.imported,
+                            if !result.errors.is_empty() {
+                                format!(" ({} errors)", result.errors.len())
+                            } else {
+                                String::new()
+                            }
+                        )
+                    };
                     sync_meta.last_sync_at = Some(now);
                     sync_meta.last_sync_status = "success".to_string();
                     sync_meta.last_sync_error = None;
@@ -69,20 +83,7 @@ pub async fn sync_now(db: State<'_, Database>) -> Result<SyncResult, EspanderErr
                         snippets_pulled: result.imported,
                         snippets_pushed: 0,
                         conflicts: 0,
-                        message: if result.imported == 0 {
-                            "Everything is already synchronized. No new snippets were found."
-                                .to_string()
-                        } else {
-                            format!(
-                                "Imported {} snippets{}",
-                                result.imported,
-                                if !result.errors.is_empty() {
-                                    format!(" ({} errors)", result.errors.len())
-                                } else {
-                                    String::new()
-                                }
-                            )
-                        },
+                        message: format!("{} {}", import_message, deploy.message("Espanso:")),
                     })
                 }
                 Err(err) => {
@@ -125,7 +126,7 @@ pub async fn sync_now(db: State<'_, Database>) -> Result<SyncResult, EspanderErr
 
             match result_res {
                 Ok(result) => {
-                    crate::commands::espanso::deploy_and_reload_inner(&db).await?;
+                    let deploy = crate::commands::espanso::deploy_and_reload_inner(&db).await?;
                     sync_meta.last_sync_at = Some(now);
                     sync_meta.last_sync_status = "success".to_string();
                     sync_meta.last_sync_error = None;
@@ -140,7 +141,13 @@ pub async fn sync_now(db: State<'_, Database>) -> Result<SyncResult, EspanderErr
                         sync_meta.sync_history.remove(0);
                     }
                     let _ = db.write_json(&db.sync_path, &sync_meta).await;
-                    Ok(result)
+                    Ok(SyncResult {
+                        success: result.success,
+                        snippets_pulled: result.snippets_pulled,
+                        snippets_pushed: result.snippets_pushed,
+                        conflicts: result.conflicts,
+                        message: format!("{} {}", result.message, deploy.message("Espanso:")),
+                    })
                 }
                 Err(err) => {
                     let err_msg = err.to_string();
