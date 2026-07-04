@@ -1,40 +1,111 @@
-# Espander
+# 🚀 Espander
 
-Espander is an open-source visual manager and sync companion for [Espanso](https://espanso.org/). It helps you create text-expansion snippets, organize them into categories, import/export data, and sync category YAML files with GitHub.
+<p align="center">
+  <strong>A modern visual manager for Espanso snippets.</strong><br>
+  Create, organize, import, export, and sync your text expansion snippets without manually editing YAML files.
+</p>
 
-## Download
+<p align="center">
+  <img src="https://img.shields.io/github/license/ashikhosenpro/Expander" alt="License">
+  <img src="https://img.shields.io/github/v/release/ashikhosenpro/Expander" alt="Latest Release">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-blue" alt="Platform">
+  <img src="https://img.shields.io/badge/Built%20With-Tauri-orange" alt="Tauri">
+</p>
 
-Stable desktop builds are published from GitHub Releases:
+---
 
-- macOS: download the `.dmg` asset from the latest release
-- Windows: download the `.exe` installer asset from the latest release
+## ✨ Overview
 
-Latest releases: <https://github.com/ashikhosenpro/Expander/releases>
+Espander is an open-source desktop application that provides a visual interface for managing **Espanso** snippets.
 
-> The first public release is planned as `v0.1.0`. Release assets are generated automatically by GitHub Actions when a `v*` tag is pushed.
+Instead of manually editing YAML files, Espander lets you manage snippets through an intuitive desktop application while keeping full compatibility with Espanso.
+
+Whether you're a developer, writer, customer support agent, or power user, Espander makes managing text expansions significantly easier.
+
+---
+
+# 👤 For End Users
 
 ## Features
 
-- Visual snippet manager for Espanso
-- Category-based YAML generation
-- Local-only mode
-- Google Sheets CSV import
-- GitHub two-way YAML sync
-- CSV and YAML import/export
-- macOS/Windows permission status panel
-- Remote update and notification metadata support
+- 🎯 Visual snippet editor
+- 📂 Category-based organization
+- 🔄 Two-way GitHub synchronization
+- 📥 Import snippets from CSV
+- 📤 Export to CSV or YAML
+- ☁️ Local-first workflow
+- 🔐 Secure GitHub token storage
+- 🖥️ Native macOS & Windows application
+- 🔔 Built-in update notifications
+
+---
+
+## Download
+
+Download the latest version from GitHub Releases:
+
+**https://github.com/ashikhosenpro/Expander/releases**
+
+Available installers:
+
+- macOS (.dmg)
+- Windows (.exe)
+
+No additional software such as Node.js, Rust, or Espanso development tools is required to install or use Espander.
+
+---
+
+## Installation
+
+### macOS
+
+1. Download the latest `.dmg`
+2. Open the installer
+3. Drag **Espander** into the Applications folder
+4. Launch the application
+
+### Windows
+
+1. Download the latest `.exe`
+2. Run the installer
+3. Follow the setup wizard
+4. Launch Espander
+
+---
 
 ## Screenshots
 
 Screenshots will be added after the first public release.
 
-## Development
+---
 
-Requirements:
+# 👨‍💻 For Developers
+
+## Tech Stack
+
+- Tauri v2
+- React
+- TypeScript
+- Rust
+- Vite
+
+---
+
+## Development Setup
+
+### Requirements
 
 - Node.js 22 or newer
-- Rust stable
-- Tauri prerequisites for your OS
+- Rust (stable)
+- Tauri prerequisites
+
+Clone the repository:
+
+```bash
+git clone https://github.com/ashikhosenpro/Expander.git
+
+cd Expander
+```
 
 Install dependencies:
 
@@ -42,99 +113,104 @@ Install dependencies:
 npm install
 ```
 
-Run the desktop app locally:
+Start the development server:
 
 ```bash
 npm run tauri:dev
 ```
 
-Build the frontend:
-
-```bash
-npm run build
-```
-
-Build desktop packages:
+Build the application:
 
 ```bash
 npm run tauri:build
 ```
 
-Run checks:
+---
+
+## Project Features
+
+- Visual YAML editor
+- Espanso-compatible snippet generation
+- GitHub repository synchronization
+- CSV import/export
+- YAML import/export
+- Secure credential management
+- Cross-platform desktop application
+- Automatic update metadata
+- Notification metadata support
+
+---
+
+## Testing
+
+Frontend build:
 
 ```bash
 npm run build
+```
+
+Rust checks:
+
+```bash
 cargo check --manifest-path src-tauri/Cargo.toml
+```
+
+Run tests:
+
+```bash
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-## GitHub Sync
+---
 
-Use a fine-grained GitHub Personal Access Token with:
+## GitHub Synchronization
 
-- Repository access: only the selected snippets repository
-- Contents: Read and Write
+Espander supports direct synchronization with GitHub repositories.
+
+Recommended Personal Access Token permissions:
+
+- Repository access
+- Contents: Read & Write
 - Metadata: Read-only
 
-Espander stores tokens in the operating system credential store when available. If that fails, it falls back to a local file under the user's `.espander` directory with owner-only permissions on Unix systems.
+Authentication tokens are stored securely using the operating system's credential manager whenever available.
 
-## WordPress Control Hub
-
-Espander can read top-bar notifications, update metadata, documentation, and about content
-from a WordPress REST API. A small WordPress plugin is included at
-`wordpress/espander-notifications`.
-
-1. Upload `wordpress/espander-notifications` to your WordPress site's `wp-content/plugins/`
-   directory.
-2. Activate **Espander Control Hub** in the WordPress dashboard.
-3. Manage notifications, application updates, documentation, about content, and anonymous
-   install counts from **Espander Hub** in the WordPress admin menu.
-4. Build Espander with your WordPress notification endpoint:
-
-```bash
-ESPANDER_NOTIFICATIONS_URL="https://your-domain.com/wp-json/espander/v1/notifications" npm run tauri:build
-```
-
-For local development you can run Tauri with the same environment variable:
-
-```bash
-ESPANDER_NOTIFICATIONS_URL="https://your-domain.com/wp-json/espander/v1/notifications" npm run tauri:dev
-```
-
-The endpoint only exposes published notification data for the app to read. Creating,
-editing, deleting, update publishing, documentation editing, and stats overview stay inside
-the WordPress dashboard and require a WordPress admin account.
-
-When `ESPANDER_NOTIFICATIONS_URL` is set, Espander automatically derives related endpoints:
-
-- Updates: `/wp-json/espander/v1/update`
-- Documentation: `/wp-json/espander/v1/content/docs`
-- About: `/wp-json/espander/v1/content/about`
-- Footer: `/wp-json/espander/v1/content/footer`
-- Anonymous install telemetry: `/wp-json/espander/v1/telemetry`
-
-## Release Metadata
-
-For safety, automatic update downloads are restricted to official GitHub Release asset URLs under `https://github.com/ashikhosenpro/Expander/releases/download/`.
-
-## Releasing
-
-1. Update versions in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
-2. Publish the GitHub Release and update release notes/download URLs if your update metadata flow uses them.
-3. Commit the changes.
-4. Create and push a tag, for example:
-
-```bash
-git tag v0.1.0
-git push origin main --tags
-```
-
-GitHub Actions builds macOS and Windows packages, uploads workflow artifacts, and attaches `.dmg`, `.exe`, and `.msi` files to the GitHub Release.
+---
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md) before opening issues or pull requests.
+Contributions are always welcome.
+
+If you'd like to improve Espander, please read:
+
+- CONTRIBUTING.md
+- SECURITY.md
+
+before opening an issue or pull request.
+
+---
+
+## Roadmap
+
+Upcoming features include:
+
+- Linux support
+- Cloud synchronization
+- Advanced snippet search
+- Keyboard shortcut customization
+- Theme support
+- Plugin system
+
+---
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+This project is licensed under the MIT License.
+
+See the LICENSE file for more information.
+
+---
+
+<p align="center">
+Made with ❤️ for the Espanso community.
+</p>
