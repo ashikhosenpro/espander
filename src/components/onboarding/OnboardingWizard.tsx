@@ -3,7 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSettingsStore } from "@/stores/useSettingsStore";
-import { detectEspanso, validateGSheetUrl, importFromGSheet } from "@/lib/tauri";
+import {
+  detectEspanso,
+  importFromGSheet,
+  openBrowser,
+  testGithubConnection,
+  validateGSheetUrl,
+} from "@/lib/tauri";
 import type { EspansoInfo } from "@/types";
 import {
   ArrowRight,
@@ -20,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 type Step = "welcome" | "sync-method" | "github" | "gsheet" | "espanso" | "complete";
 type SyncMethod = "github" | "gsheet" | "local" | null;
+type GithubConnectionResult = { success: boolean; message: string; default_branch?: string };
 
 export function OnboardingWizard() {
   const { updateSettings } = useSettingsStore();
@@ -27,6 +34,12 @@ export function OnboardingWizard() {
   const [syncMethod, setSyncMethod] = useState<SyncMethod>(null);
   const [gsheetUrl, setGsheetUrl] = useState("");
   const [gsheetValid, setGsheetValid] = useState<boolean | null>(null);
+  const [githubRepoUrl, setGithubRepoUrl] = useState("");
+  const [githubToken, setGithubToken] = useState("");
+  const [githubResult, setGithubResult] = useState<GithubConnectionResult | null>(null);
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [isTestingGithub, setIsTestingGithub] = useState(false);
+  const [isConnectingGithub, setIsConnectingGithub] = useState(false);
   const [espansoInfo, setEspansoInfo] = useState<EspansoInfo | null>(null);
   const [detecting, setDetecting] = useState(true);
 
@@ -44,13 +57,56 @@ export function OnboardingWizard() {
     setGsheetValid(valid);
   };
 
+  const handleTestGithub = async (): Promise<GithubConnectionResult> => {
+    setIsTestingGithub(true);
+    setGithubResult(null);
+    try {
+      const result = await testGithubConnection(githubRepoUrl, githubToken);
+      setGithubResult(result);
+      return result;
+    } catch (err) {
+      const result: GithubConnectionResult = {
+        success: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+      setGithubResult(result);
+      return result;
+    } finally {
+      setIsTestingGithub(false);
+    }
+  };
+
+  const handleConnectGithub = async () => {
+    setIsConnectingGithub(true);
+    setGithubConnected(false);
+    try {
+      const result = await handleTestGithub();
+      if (result.success) {
+        await updateSettings({
+          github_repo_url: githubRepoUrl,
+          github_token: githubToken,
+          github_branch: result.default_branch || "main",
+          sync_provider: "github",
+        });
+        setGithubConnected(true);
+      }
+    } finally {
+      setIsConnectingGithub(false);
+    }
+  };
+
   const handleFinish = async () => {
     const updates: Record<string, unknown> = {
       first_launch_complete: true,
-      sync_provider: syncMethod || "local",
+      sync_provider: syncMethod === "github" && !githubConnected ? "local" : syncMethod || "local",
     };
     if (syncMethod === "gsheet" && gsheetUrl) {
       updates.gsheet_csv_url = gsheetUrl;
+    }
+    if (syncMethod === "github" && githubConnected) {
+      updates.github_repo_url = githubRepoUrl;
+      updates.github_token = githubToken;
+      updates.github_branch = githubResult?.default_branch || "main";
     }
     if (espansoInfo?.found) {
       updates.espanso_path = espansoInfo.path;
@@ -69,6 +125,8 @@ export function OnboardingWizard() {
         return syncMethod !== null;
       case "gsheet":
         return gsheetValid === true;
+      case "github":
+        return githubConnected;
       default:
         return true;
     }
@@ -83,6 +141,8 @@ export function OnboardingWizard() {
       setStep("github");
     } else if (syncMethod === "gsheet" && step === "sync-method") {
       setStep("gsheet");
+    } else if (step === "github" || step === "gsheet") {
+      setStep("espanso");
     } else if (idx < order.length - 1) {
       setStep(order[idx + 1]);
     }
@@ -189,26 +249,75 @@ export function OnboardingWizard() {
               </div>
               <h2 className="text-2xl font-bold">Connect GitHub</h2>
               <p className="text-sm text-muted-foreground">
-                You'll be guided through GitHub OAuth to connect your account.
+                Enter your repository URL and personal access token.
               </p>
             </div>
-            <Button
-              onClick={() => {
-                // In production: launch OAuth device flow
-                next();
-              }}
-              size="lg"
-              className="w-full gap-2"
-            >
-              <Github className="h-5 w-5" />
-              Connect GitHub
-            </Button>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="onboarding-github-url">GitHub repository URL</Label>
+                <Input
+                  id="onboarding-github-url"
+                  placeholder="https://github.com/owner/repo"
+                  value={githubRepoUrl}
+                  onChange={(e) => {
+                    setGithubRepoUrl(e.target.value);
+                    setGithubConnected(false);
+                    setGithubResult(null);
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="onboarding-github-token">Personal access token</Label>
+                <Input
+                  id="onboarding-github-token"
+                  type="password"
+                  placeholder="github_pat_..."
+                  value={githubToken}
+                  onChange={(e) => {
+                    setGithubToken(e.target.value);
+                    setGithubConnected(false);
+                    setGithubResult(null);
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleTestGithub}
+                  disabled={!githubRepoUrl || !githubToken || isTestingGithub || isConnectingGithub}
+                  className="flex-1"
+                >
+                  {isTestingGithub ? "Testing..." : "Test"}
+                </Button>
+                <Button
+                  onClick={handleConnectGithub}
+                  disabled={!githubRepoUrl || !githubToken || isTestingGithub || isConnectingGithub}
+                  className="flex-1"
+                >
+                  {isConnectingGithub ? "Connecting..." : "Connect"}
+                </Button>
+              </div>
+              {githubResult && (
+                <div className={cn(
+                  "rounded-lg border p-3 text-xs",
+                  githubResult.success
+                    ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400"
+                    : "border-red-500/20 bg-red-500/5 text-red-400"
+                )}>
+                  <div className="font-medium">{githubResult.success ? "Connection ready" : "Connection failed"}</div>
+                  <div className="mt-1 opacity-90">{githubResult.message}</div>
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={back} className="gap-2">
                 <ArrowLeft className="h-4 w-4" /> Back
               </Button>
               <Button variant="ghost" onClick={() => setStep("espanso")} className="flex-1">
-                Skip this step
+                Skip
+              </Button>
+              <Button onClick={next} disabled={!canContinue()} className="flex-1 gap-2">
+                Continue <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -298,6 +407,14 @@ export function OnboardingWizard() {
                 <p className="text-xs text-muted-foreground mt-1">
                   You can configure the path later in Settings.
                 </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 gap-1.5 text-xs"
+                  onClick={() => openBrowser("https://espanso.org/install/")}
+                >
+                  Install Espanso <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
               </div>
             )}
 

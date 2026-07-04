@@ -18,7 +18,9 @@
         "minWidth": 800,
         "minHeight": 500,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
     "security": {
@@ -28,6 +30,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "ASHIK HOSEN",
+    "homepage": "https://ashikhosen.com",
+    "copyright": "Copyright © 2026 ASHIK HOSEN. All rights reserved.",
+    "shortDescription": "Visual manager and sync companion for Espanso.",
+    "longDescription": "Espander is a visual manager and sync companion for Espanso snippets, created by ASHIK HOSEN.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -35,6 +42,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "startMenuFolder": "Espander"
+      }
+    },
     "macOS": {
       "signingIdentity": "-"
     }

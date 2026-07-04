@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { openBrowser, readFooterSettings, registerAppInstall, type FooterSettings } from "@/lib/tauri";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AlertTriangle,
   ExternalLink,
@@ -38,6 +39,13 @@ export function AppLayout() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  useEffect(() => {
+    if (!settings.first_launch_complete) {
+      getCurrentWindow().show().catch(() => {});
+      getCurrentWindow().setFocus().catch(() => {});
+    }
+  }, [settings.first_launch_complete]);
 
   useEffect(() => {
     checkUpdates();
@@ -88,15 +96,14 @@ export function AppLayout() {
           <p className="text-xs text-amber-300/90 flex-1">
             Espanso not detected. Snippets will be saved locally but won't be deployed.
           </p>
-          <a
-            href="https://espanso.org/install/"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1.5 border-amber-500/30 text-amber-300 hover:text-amber-200"
+            onClick={() => openBrowser("https://espanso.org/install/")}
           >
-            <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 border-amber-500/30 text-amber-300 hover:text-amber-200">
-              <Download className="h-3 w-3" /> Install Espanso
-            </Button>
-          </a>
+            <Download className="h-3 w-3" /> Install Espanso
+          </Button>
         </div>
       )}
 

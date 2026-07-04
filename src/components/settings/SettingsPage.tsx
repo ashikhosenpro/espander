@@ -57,6 +57,7 @@ import {
   BookOpen,
   ArrowUpCircle,
   RefreshCw,
+  RotateCcw,
   ExternalLink,
   GripVertical,
   ArrowUp,
@@ -95,6 +96,10 @@ export function SettingsPage() {
       setLocalErrorMsg(err instanceof Error ? err.message : String(err));
       setShowFallback(true);
     }
+  };
+
+  const handleRunOnboarding = async () => {
+    await updateSettings({ first_launch_complete: false });
   };
 
   const [deleteSafetyOpen, setDeleteSafetyOpen] = useState(false);
@@ -361,6 +366,21 @@ export function SettingsPage() {
         </TabsList>
 
         <TabsContent value="general" className="space-y-4">
+          <div className="settings-panel rounded-xl border border-border bg-card p-5 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-medium">Setup</h3>
+                <p className="mt-1 text-xs text-muted-foreground/75">
+                  Run the first-time setup again to change sync provider and Espanso connection.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" className="h-8 gap-2 text-xs" onClick={handleRunOnboarding}>
+                <RotateCcw className="h-3.5 w-3.5" />
+                Onboarding
+              </Button>
+            </div>
+          </div>
+
           <div className="settings-panel rounded-xl border border-border bg-card p-5 space-y-4">
             <h3 className="text-sm font-medium">Appearance</h3>
             <div className="flex items-center gap-3">

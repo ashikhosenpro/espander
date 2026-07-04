@@ -4,6 +4,7 @@ use tokio::process::Command;
 use crate::db::schema::EspansoInfo;
 use crate::error::EspanderError;
 
+#[cfg(target_os = "macos")]
 const COMMON_MAC_PATHS: &[&str] = &[
     "/opt/homebrew/bin/espanso",
     "/usr/local/bin/espanso",
@@ -46,6 +47,7 @@ async fn try_detect() -> Result<EspansoInfo, EspanderError> {
 }
 
 async fn find_espanso_binary() -> Result<PathBuf, EspanderError> {
+    #[cfg(target_os = "macos")]
     for p in COMMON_MAC_PATHS {
         let path = PathBuf::from(p);
         if path.exists() {
@@ -62,16 +64,22 @@ async fn find_espanso_binary() -> Result<PathBuf, EspanderError> {
         }
     }
 
-    let output = Command::new("which")
+    let lookup_command = if cfg!(target_os = "windows") {
+        "where"
+    } else {
+        "which"
+    };
+
+    let output = Command::new(lookup_command)
         .arg("espanso")
         .output()
         .await
         .map_err(|_| EspanderError::EspansoNotFound("espanso not found in PATH".to_string()))?;
 
     if output.status.success() {
-        let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !path_str.is_empty() {
-            return Ok(PathBuf::from(path_str));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if let Some(path_str) = stdout.lines().find(|line| !line.trim().is_empty()) {
+            return Ok(PathBuf::from(path_str.trim()));
         }
     }
 
@@ -110,8 +118,23 @@ pub async fn get_config_dir(path: &PathBuf) -> Result<PathBuf, EspanderError> {
                 return Ok(path);
             }
         }
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(app_data) = std::env::var("APPDATA") {
+                let path = PathBuf::from(app_data).join("espanso");
+                if path.exists() || !stdout.trim().contains('/') {
+                    return Ok(path);
+                }
+            }
+        }
         Ok(PathBuf::from(stdout.trim()))
     } else {
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(app_data) = std::env::var("APPDATA") {
+                return Ok(PathBuf::from(app_data).join("espanso"));
+            }
+        }
         Err(EspanderError::EspansoNotFound(
             "failed to get config dir".to_string(),
         ))

@@ -11,13 +11,16 @@ pub async fn sync_now(db: State<'_, Database>) -> Result<SyncResult, EspanderErr
     let provider_type = settings.sync_provider;
 
     match provider_type.as_str() {
-        "local" => Ok(SyncResult {
-            success: true,
-            snippets_pulled: 0,
-            snippets_pushed: 0,
-            conflicts: 0,
-            message: "Local mode: no sync needed".to_string(),
-        }),
+        "local" => {
+            crate::commands::espanso::deploy_and_reload_inner(&db).await?;
+            Ok(SyncResult {
+                success: true,
+                snippets_pulled: 0,
+                snippets_pushed: 0,
+                conflicts: 0,
+                message: "Local snippets deployed to Espanso.".to_string(),
+            })
+        }
         "gsheet" => {
             let csv_url = settings.gsheet_csv_url.ok_or_else(|| {
                 EspanderError::SyncFailed(
@@ -45,6 +48,7 @@ pub async fn sync_now(db: State<'_, Database>) -> Result<SyncResult, EspanderErr
 
             match result_res {
                 Ok(result) => {
+                    crate::commands::espanso::deploy_and_reload_inner(&db).await?;
                     sync_meta.last_sync_at = Some(now);
                     sync_meta.last_sync_status = "success".to_string();
                     sync_meta.last_sync_error = None;
@@ -121,9 +125,7 @@ pub async fn sync_now(db: State<'_, Database>) -> Result<SyncResult, EspanderErr
 
             match result_res {
                 Ok(result) => {
-                    if let Err(e) = crate::commands::espanso::deploy_and_reload_inner(&db).await {
-                        eprintln!("deploy_and_reload_inner after github sync: {}", e);
-                    }
+                    crate::commands::espanso::deploy_and_reload_inner(&db).await?;
                     sync_meta.last_sync_at = Some(now);
                     sync_meta.last_sync_status = "success".to_string();
                     sync_meta.last_sync_error = None;

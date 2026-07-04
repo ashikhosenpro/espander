@@ -1,10 +1,11 @@
 [package]
 name = "espander"
 version = "0.1.0"
-description = "Visual Manager & Cloud Sync Companion for Espanso"
-authors = ["Ashik Hosen"]
+description = "Visual manager and sync companion for Espanso"
+authors = ["ASHIK HOSEN"]
 license = "MIT"
 repository = "https://github.com/ashikhosenpro/Expander"
+homepage = "https://ashikhosen.com"
 edition = "2021"
 
 [lib]
@@ -15,7 +16,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -30,3 +31,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 base64 = "0.22"
 tempfile = "3"
 keyring = "3"
+shellexpand = "3"

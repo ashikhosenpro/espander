@@ -203,20 +203,37 @@ pub async fn deploy_and_reload_inner(db: &Database) -> Result<(), EspanderError>
     };
     yaml_generator::cleanup_old_yaml(&db.yaml_dir, &active_categories).await?;
 
-    // Deploy to Espanso
-    let settings = db.get_settings().await?;
-    if let (Some(espanso_path), Some(config_dir)) = (
-        settings.espanso_path.clone(),
-        settings.espanso_config_dir.clone(),
-    ) {
-        let espanso_path = PathBuf::from(&espanso_path);
-        let config_dir = PathBuf::from(&config_dir);
+    // Deploy to Espanso. If the user installed Espanso after first launch, detect it here too.
+    let mut settings = db.get_settings().await?;
+    if settings.espanso_config_dir.is_none() || settings.espanso_path.is_none() {
+        if let Ok(info) = detector::detect_espanso().await {
+            if info.found {
+                let patch = serde_json::json!({
+                    "espanso_path": info.path,
+                    "espanso_config_dir": info.config_dir,
+                    "espanso_auto_detected": true,
+                });
+                settings = db.update_settings(patch).await?;
+            }
+        }
+    }
 
+    if let Some(config_dir) = settings.espanso_config_dir.clone() {
+        let config_dir = PathBuf::from(&config_dir);
         reloader::deploy_yaml_to_espanso(&db.yaml_dir, &config_dir).await?;
 
         if settings.auto_reload {
+            let Some(espanso_path) = settings.espanso_path.clone() else {
+                return Ok(());
+            };
+            let espanso_path = PathBuf::from(&espanso_path);
             reloader::reload_espanso(&espanso_path).await?;
         }
+    } else {
+        return Err(EspanderError::EspansoNotFound(
+            "Espanso config folder was not found. Open Settings and set the Espanso config path."
+                .to_string(),
+        ));
     }
 
     Ok(())
