@@ -4,6 +4,7 @@ import { TopBar } from "./TopBar";
 import { useUIStore } from "@/stores/useUIStore";
 import { SnippetListPage } from "@/components/snippets/SnippetListPage";
 import { SettingsPage } from "@/components/settings/SettingsPage";
+import { NotificationsPage } from "@/components/notifications/NotificationsPage";
 import { SnippetEditorDialog } from "@/components/snippets/SnippetEditorDialog";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { useSettingsStore } from "@/stores/useSettingsStore";
@@ -12,7 +13,7 @@ import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { readFooterSettings, registerAppInstall, type FooterSettings } from "@/lib/tauri";
+import { openBrowser, readFooterSettings, registerAppInstall, type FooterSettings } from "@/lib/tauri";
 import {
   AlertTriangle,
   ExternalLink,
@@ -23,7 +24,7 @@ import {
 } from "lucide-react";
 
 export function AppLayout() {
-  const { activeView } = useUIStore();
+  const { activeView, openNotification } = useUIStore();
   const { settings, loadSettings } = useSettingsStore();
   const { announcement, announcementDismissed, dismissAnnouncement, checkUpdates } = useUpdateStore();
   const { activeNotification, dismissNotification, startPolling } = useNotificationStore();
@@ -125,10 +126,19 @@ export function AppLayout() {
         <Sidebar />
         <div className="app-content flex flex-1 flex-col min-w-0">
           <TopBar />
-          {activeNotification && (
+          {activeNotification && activeView !== "settings" && activeView !== "notifications" && (
             <div
+              role="button"
+              tabIndex={0}
+              onClick={() => openNotification(activeNotification.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openNotification(activeNotification.id);
+                }
+              }}
               className={cn(
-                "relative border-b px-4 py-3 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.16)]",
+                "relative cursor-pointer border-b px-4 py-3 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.16)]",
                 activeNotification.type_name === "success" && "border-emerald-500/25 bg-[linear-gradient(90deg,rgba(16,185,129,0.18),rgba(20,184,166,0.08),rgba(15,23,42,0.02))]",
                 activeNotification.type_name === "warning" && "border-amber-500/25 bg-[linear-gradient(90deg,rgba(245,158,11,0.18),rgba(251,191,36,0.08),rgba(15,23,42,0.02))]",
                 activeNotification.type_name === "error" && "border-red-500/25 bg-[linear-gradient(90deg,rgba(239,68,68,0.18),rgba(244,63,94,0.08),rgba(15,23,42,0.02))]",
@@ -157,21 +167,30 @@ export function AppLayout() {
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-semibold text-foreground">{activeNotification.title}</span>
                     {activeNotification.action_url && activeNotification.action_label && (
-                      <a
-                        href={activeNotification.action_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openBrowser(activeNotification.action_url!);
+                        }}
                         className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-background/40 px-2 py-0.5 text-[11px] font-medium text-foreground hover:bg-background/70"
                       >
                         {activeNotification.action_label}
                         <ExternalLink className="h-3 w-3" />
-                      </a>
+                      </button>
                     )}
                   </div>
 
                   {activeNotification.html_content ? (
                     <div
                       className="espander-rich-notification max-w-none text-muted-foreground [&_a]:font-medium [&_a]:text-sky-300 [&_a:hover]:text-sky-200 [&_b]:text-foreground [&_strong]:text-foreground [&_code]:rounded [&_code]:bg-background/50 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[11px] [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
+                      onClick={(event) => {
+                        const anchor = (event.target as HTMLElement).closest("a");
+                        if (anchor instanceof HTMLAnchorElement && anchor.href) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          openBrowser(anchor.href);
+                        }
+                      }}
                       dangerouslySetInnerHTML={{ __html: activeNotification.html_content }}
                     />
                   ) : (
@@ -181,7 +200,10 @@ export function AppLayout() {
 
                 {activeNotification.dismissible && (
                   <button
-                    onClick={() => dismissNotification(activeNotification.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      dismissNotification(activeNotification.id);
+                    }}
                     className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/30 text-muted-foreground hover:bg-background/70 hover:text-foreground"
                     aria-label="Dismiss notification"
                   >
@@ -192,23 +214,27 @@ export function AppLayout() {
             </div>
           )}
           <main className="app-main flex-1 overflow-y-auto scrollbar-thin">
-            {activeView === "settings" ? <SettingsPage /> : <SnippetListPage />}
+            {activeView === "settings" ? (
+              <SettingsPage />
+            ) : activeView === "notifications" ? (
+              <NotificationsPage />
+            ) : (
+              <SnippetListPage />
+            )}
           </main>
           <footer className="app-footer flex items-center justify-between px-4 py-2 border-t border-border bg-muted/20">
             <p className="text-[11px] text-muted-foreground/70">
               {footerSettings.left_text}
             </p>
             {footerSettings.link_url && footerSettings.link_label && (
-              <a
-                href={footerSettings.link_url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => openBrowser(footerSettings.link_url)}
                 className="text-[11px] text-muted-foreground/70 hover:text-foreground flex items-center gap-1.5 transition-colors"
               >
                 {footerSettings.show_github_icon && <Github className="h-3 w-3" />}
                 {footerSettings.link_label}
                 <ExternalLink className="h-2.5 w-2.5" />
-              </a>
+              </button>
             )}
           </footer>
         </div>

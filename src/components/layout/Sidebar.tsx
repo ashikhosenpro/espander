@@ -14,6 +14,7 @@ import {
   Grid3X3,
   Heart,
   Settings,
+  Bell,
   RefreshCw,
   Globe,
   WifiOff,
@@ -23,22 +24,29 @@ import {
   Info,
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 
 const navItems = [
   { id: "snippets" as const, label: "All Snippets", icon: Grid3X3 },
   { id: "favorites" as const, label: "Favorites", icon: Heart },
+  { id: "notifications" as const, label: "Notifications", icon: Bell },
 ];
 
 export function Sidebar() {
-  const { activeView, setActiveView, sidebarOpen } = useUIStore();
+  const { activeView, setActiveView, sidebarOpen, clearSelectedNotification } = useUIStore();
   const { categories, fetchCategories } = useCategoryStore();
   const { snippets, fetchSnippets, setSearch, setFilter, setFilterFavorite } = useSnippetStore();
   const { syncStatus, lastSyncAt, lastResult, errorMessage, syncNow } = useSyncStore();
+  const { notifications, isRead, fetchNotificationsList } = useNotificationStore();
 
   useEffect(() => {
     fetchCategories();
     fetchSnippets();
-  }, [fetchCategories, fetchSnippets]);
+    fetchNotificationsList();
+  }, [fetchCategories, fetchSnippets, fetchNotificationsList]);
+
+  const unreadNotifications = notifications.filter((notification) => !isRead(notification.id)).length;
+  const favoriteCount = snippets.filter((snippet) => snippet.is_favorite).length;
 
   const snippetCountByCategory = useMemo(() => {
     const map: Record<string, number> = {};
@@ -48,8 +56,11 @@ export function Sidebar() {
     return map;
   }, [snippets]);
 
-  const handleNavClick = (id: "snippets" | "favorites") => {
+  const handleNavClick = (id: "snippets" | "favorites" | "notifications") => {
     setActiveView(id);
+    if (id === "notifications") {
+      clearSelectedNotification();
+    }
     setFilterFavorite(id === "favorites");
     if (id === "snippets") {
       setFilter(null);
@@ -112,6 +123,21 @@ export function Sidebar() {
             >
               <Icon className="h-4 w-4" />
               <span className="flex-1 text-left">{item.label}</span>
+              {item.id === "snippets" && (
+                <span className="text-[11px] text-sidebar-muted tabular-nums">
+                  {snippets.length}
+                </span>
+              )}
+              {item.id === "favorites" && favoriteCount > 0 && (
+                <span className="text-[11px] text-sidebar-muted tabular-nums">
+                  {favoriteCount}
+                </span>
+              )}
+              {item.id === "notifications" && unreadNotifications > 0 && (
+                <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-sky-300">
+                  {unreadNotifications}
+                </span>
+              )}
             </button>
           );
         })}

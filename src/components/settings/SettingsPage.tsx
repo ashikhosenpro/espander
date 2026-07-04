@@ -61,11 +61,9 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
-  CheckCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUpdateStore } from "@/stores/useUpdateStore";
-import { useNotificationStore } from "@/stores/useNotificationStore";
 
 export function SettingsPage() {
   const { settings, updateSettings } = useSettingsStore();
@@ -84,16 +82,6 @@ export function SettingsPage() {
   const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [draggedCatId, setDraggedCatId] = useState<string | null>(null);
   const [dataMessage, setDataMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const {
-    notifications,
-    isFetching: notificationsLoading,
-    fetchNotificationsList,
-    markAsRead,
-    removeNotification,
-    clearAllNotifications,
-    isRead,
-  } = useNotificationStore();
-
   const { updater, currentVersion, isChecking, isUpdating, checkUpdates, installUpdate } = useUpdateStore();
   const [localErrorMsg, setLocalErrorMsg] = useState<string | null>(null);
   const [showFallback, setShowFallback] = useState(false);
@@ -212,14 +200,6 @@ export function SettingsPage() {
 
   useEffect(() => {
     readDocsPage().then(setDocsHtml);
-  }, []);
-
-  const refreshNotifications = async () => {
-    await fetchNotificationsList();
-  };
-
-  useEffect(() => {
-    refreshNotifications();
   }, []);
 
   useEffect(() => {
@@ -1147,137 +1127,6 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="updates" className="space-y-4">
-          <div className="settings-panel rounded-xl border border-border bg-card p-5 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-sm font-medium">Notifications</h3>
-                <p className="mt-1 text-xs text-muted-foreground/70">
-                  Latest messages from the Espander channel.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5"
-                  onClick={clearAllNotifications}
-                  disabled={notifications.length === 0}
-                >
-                  <Trash2 className="h-3 w-3" />
-                  Clear all
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5"
-                  onClick={refreshNotifications}
-                  disabled={notificationsLoading}
-                >
-                  <RefreshCw className={cn("h-3 w-3", notificationsLoading && "animate-spin")} />
-                  Refresh
-                </Button>
-              </div>
-            </div>
-
-            {notifications.length > 0 ? (
-              <div className="space-y-2">
-                {notifications.map((notification) => {
-                  const read = isRead(notification.id);
-
-                  return (
-                    <div
-                      key={notification.id}
-                      className={cn(
-                        "overflow-hidden rounded-lg border text-xs shadow-sm",
-                        read && "opacity-70",
-                        notification.type_name === "warning"
-                          ? "border-amber-500/25 bg-amber-500/[0.06]"
-                          : notification.type_name === "error" || notification.type_name === "danger"
-                            ? "border-red-500/25 bg-red-500/[0.06]"
-                            : notification.type_name === "success"
-                              ? "border-emerald-500/25 bg-emerald-500/[0.06]"
-                              : "border-sky-500/25 bg-sky-500/[0.06]"
-                      )}
-                      style={{
-                        background: notification.background_color || undefined,
-                        color: notification.text_color || undefined,
-                      }}
-                    >
-                      {notification.custom_css && <style>{notification.custom_css}</style>}
-                      <div className="flex items-start gap-3 p-3">
-                        <div className={cn(
-                          "mt-0.5 h-2.5 w-2.5 flex-shrink-0 rounded-full",
-                          read
-                            ? "bg-muted-foreground/40"
-                            : notification.type_name === "warning"
-                              ? "bg-amber-400"
-                              : notification.type_name === "error" || notification.type_name === "danger"
-                                ? "bg-red-400"
-                                : notification.type_name === "success"
-                                  ? "bg-emerald-400"
-                                  : "bg-sky-400"
-                        )} />
-                        <div className="min-w-0 flex-1 space-y-1.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-foreground">{notification.title}</span>
-                            <span className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                              {read ? "Read" : "Unread"}
-                            </span>
-                          </div>
-                          {notification.html_content ? (
-                            <div
-                              className="espander-rich-notification text-muted-foreground [&_a]:font-medium [&_a]:text-sky-300 [&_a:hover]:text-sky-200 [&_b]:text-foreground [&_strong]:text-foreground [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4"
-                              dangerouslySetInnerHTML={{ __html: notification.html_content }}
-                            />
-                          ) : (
-                            <p className="leading-relaxed text-muted-foreground">{notification.message}</p>
-                          )}
-                          {notification.action_url && notification.action_label && (
-                            <a
-                              href={notification.action_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-300 hover:text-sky-200"
-                            >
-                              {notification.action_label}
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
-                        </div>
-                        <div className="flex flex-shrink-0 items-center gap-1">
-                          {!read && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => markAsRead(notification.id)}
-                              title="Mark as read"
-                            >
-                              <CheckCheck className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-red-300"
-                            onClick={() => removeNotification(notification.id)}
-                            title="Remove"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground/70">
-                No active notifications right now.
-              </p>
-            )}
-          </div>
-
           <div className="settings-panel rounded-xl border border-border bg-card p-5 space-y-4">
             <h3 className="text-sm font-medium">Application Updates</h3>
             <p className="text-xs text-muted-foreground/70">

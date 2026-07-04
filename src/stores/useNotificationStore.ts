@@ -9,10 +9,8 @@ interface NotificationStore {
   fetchActiveNotification: () => Promise<void>;
   dismissNotification: (id: string) => void;
   markAsRead: (id: string) => void;
-  removeNotification: (id: string) => void;
-  clearAllNotifications: () => void;
+  markAllAsRead: () => void;
   isRead: (id: string) => boolean;
-  isRemoved: (id: string) => boolean;
   startPolling: (intervalMs?: number) => () => void;
 }
 
@@ -32,10 +30,6 @@ export const useNotificationStore = create<NotificationStore>((set, get) => {
 
   const isRead = (id: string): boolean => {
     return localStorage.getItem(`read_notif_${id}`) === "1";
-  };
-
-  const isRemoved = (id: string): boolean => {
-    return localStorage.getItem(`removed_notif_${id}`) === "1";
   };
 
   const markAsRead = (id: string) => {
@@ -66,7 +60,6 @@ export const useNotificationStore = create<NotificationStore>((set, get) => {
     const eligible = getScheduledNotifications(notifications).filter((notif) => {
       if (isDismissedToday(notif.id)) return false;
       if (isRead(notif.id)) return false;
-      if (isRemoved(notif.id)) return false;
 
       return true;
     });
@@ -84,16 +77,14 @@ export const useNotificationStore = create<NotificationStore>((set, get) => {
     activeNotification: null,
     isFetching: false,
     isRead,
-    isRemoved,
 
     fetchNotificationsList: async () => {
       set({ isFetching: true });
       try {
         const res = await fetchNotifications();
         const scheduled = getScheduledNotifications(res.notifications);
-        const visible = scheduled.filter((notification) => !isRemoved(notification.id));
         const active = getScheduledActiveNotification(scheduled);
-        set({ notifications: visible, activeNotification: active, isFetching: false });
+        set({ notifications: scheduled, activeNotification: active, isFetching: false });
       } catch (err) {
         console.error("Failed to fetch notifications:", err);
         set({ isFetching: false });
@@ -123,15 +114,8 @@ export const useNotificationStore = create<NotificationStore>((set, get) => {
       get().fetchActiveNotification();
     },
 
-    removeNotification: (id: string) => {
-      localStorage.setItem(`removed_notif_${id}`, "1");
-      get().fetchActiveNotification();
-    },
-
-    clearAllNotifications: () => {
-      get().notifications.forEach((notification) => {
-        localStorage.setItem(`removed_notif_${notification.id}`, "1");
-      });
+    markAllAsRead: () => {
+      get().notifications.forEach((notification) => markAsRead(notification.id));
       get().fetchActiveNotification();
     },
 
