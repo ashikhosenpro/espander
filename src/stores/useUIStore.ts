@@ -4,7 +4,7 @@ import type { ViewMode } from "@/types";
 interface UIStore {
   theme: "dark" | "light" | "system";
   sidebarOpen: boolean;
-  activeView: "snippets" | "favorites" | "notifications" | "settings" | "sync";
+  activeView: "snippets" | "favorites" | "notifications" | "settings" | "tools" | "sync";
   viewMode: ViewMode;
   editorOpen: boolean;
   editorMode: "create" | "edit";

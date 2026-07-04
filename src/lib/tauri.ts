@@ -144,10 +144,16 @@ export const downloadAndInstallUpdate = (downloadUrl: string) =>
 // Centralized Notifications
 export interface Notification {
   id: string;
+  content_type?: "plain" | "html" | null;
+  top_display_mode?: "full" | "excerpt" | null;
+  top_visibility_mode?: "global" | "custom" | null;
+  top_visible_views?: string[] | null;
   title: string;
+  excerpt?: string | null;
   message: string;
   html_content: string | null;
   custom_css: string | null;
+  custom_js: string | null;
   background_color: string | null;
   text_color: string | null;
   action_label: string | null;
@@ -156,6 +162,13 @@ export interface Notification {
   active: boolean;
   start_date: string | null;
   end_date: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  schedule_mode?: "always" | "daily" | "interval_days" | "time_windows" | null;
+  schedule_interval_days?: number | null;
+  schedule_time_windows?: string[] | null;
+  schedule_window_minutes?: number | null;
+  schedule_max_per_day?: number | null;
   repeat_daily: boolean;
   dismissible: boolean;
   priority: number;
@@ -167,6 +180,37 @@ export interface NotificationsResponse {
 
 export const fetchNotifications = () =>
   invoke<NotificationsResponse>("fetch_notifications");
+
+export interface HubTool {
+  id: string;
+  name: string;
+  version: string | null;
+  image_url: string | null;
+  short_description: string;
+  button_label: string;
+  button_url: string;
+  active: boolean;
+  sort_order: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface HubToolsResponse {
+  tools: HubTool[];
+}
+
+export const fetchHubTools = () =>
+  invoke<HubToolsResponse>("fetch_hub_tools");
+
+export interface GlobalTexts {
+  more_tools_title: string;
+  more_tools_subtitle: string;
+  notifications_title: string;
+  notifications_subtitle: string;
+}
+
+export const fetchGlobalTexts = () =>
+  invoke<GlobalTexts>("fetch_global_texts");
 
 export const registerAppInstall = (deviceId: string) =>
   invoke<void>("register_app_install", { deviceId });

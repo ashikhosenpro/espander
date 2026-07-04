@@ -1,13 +1,24 @@
-import { Search, Plus, List, Grid3X3 } from "lucide-react";
+import { Bell, Search, Plus, List, Grid3X3 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useSnippetStore } from "@/stores/useSnippetStore";
 import { useUIStore } from "@/stores/useUIStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
+import { useGlobalTextStore } from "@/stores/useGlobalTextStore";
 import { cn } from "@/lib/utils";
 
 export function TopBar() {
   const { searchQuery, setSearch } = useSnippetStore();
-  const { viewMode, setViewMode, openEditor } = useUIStore();
+  const { viewMode, setViewMode, openEditor, setActiveView, clearSelectedNotification } = useUIStore();
+  const { notifications, isRead } = useNotificationStore();
+  const { texts } = useGlobalTextStore();
+
+  const unreadNotifications = notifications.filter((notification) => !isRead(notification.id)).length;
+
+  const openNotifications = () => {
+    clearSelectedNotification();
+    setActiveView("notifications");
+  };
 
   return (
     <header className="flex h-14 items-center gap-3 border-b border-border bg-background px-4">
@@ -41,6 +52,20 @@ export function TopBar() {
           <Grid3X3 className="h-4 w-4" />
         </button>
       </div>
+
+      <button
+        onClick={openNotifications}
+        className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        aria-label={texts.notifications_title}
+        title={texts.notifications_title}
+      >
+        <Bell className="h-4 w-4" />
+        {unreadNotifications > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-sky-500 px-1 text-center text-[10px] font-semibold leading-4 text-white shadow-sm">
+            {unreadNotifications > 99 ? "99+" : unreadNotifications}
+          </span>
+        )}
+      </button>
 
       <Button onClick={() => openEditor("create")} size="sm" className="h-8 gap-1">
         <Plus className="h-4 w-4" />

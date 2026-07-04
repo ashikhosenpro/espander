@@ -147,6 +147,8 @@ pub fn run() {
             commands::updater::check_updates_and_announcements,
             commands::updater::download_and_install_update,
             commands::updater::fetch_notifications,
+            commands::updater::fetch_hub_tools,
+            commands::updater::fetch_global_texts,
             commands::updater::register_app_install,
         ])
         .run(tauri::generate_context!())

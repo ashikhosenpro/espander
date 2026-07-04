@@ -178,12 +178,24 @@ fn open_installer(path: &std::path::Path) -> Result<(), EspanderError> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Notification {
     pub id: String,
+    #[serde(default)]
+    pub content_type: Option<String>,
+    #[serde(default)]
+    pub top_display_mode: Option<String>,
+    #[serde(default)]
+    pub top_visibility_mode: Option<String>,
+    #[serde(default)]
+    pub top_visible_views: Option<Vec<String>>,
     pub title: String,
+    #[serde(default)]
+    pub excerpt: Option<String>,
     pub message: String,
     #[serde(default)]
     pub html_content: Option<String>,
     #[serde(default)]
     pub custom_css: Option<String>,
+    #[serde(default)]
+    pub custom_js: Option<String>,
     #[serde(default)]
     pub background_color: Option<String>,
     #[serde(default)]
@@ -196,6 +208,20 @@ pub struct Notification {
     pub active: bool,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub schedule_mode: Option<String>,
+    #[serde(default)]
+    pub schedule_interval_days: Option<i32>,
+    #[serde(default)]
+    pub schedule_time_windows: Option<Vec<String>>,
+    #[serde(default)]
+    pub schedule_window_minutes: Option<i32>,
+    #[serde(default)]
+    pub schedule_max_per_day: Option<i32>,
     pub repeat_daily: bool,
     pub dismissible: bool,
     pub priority: i32,
@@ -204,6 +230,38 @@ pub struct Notification {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NotificationsResponse {
     pub notifications: Vec<Notification>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HubTool {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub image_url: Option<String>,
+    pub short_description: String,
+    pub button_label: String,
+    pub button_url: String,
+    pub active: bool,
+    pub sort_order: i32,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HubToolsResponse {
+    pub tools: Vec<HubTool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GlobalTexts {
+    pub more_tools_title: String,
+    pub more_tools_subtitle: String,
+    pub notifications_title: String,
+    pub notifications_subtitle: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -242,6 +300,63 @@ pub async fn fetch_notifications() -> Result<NotificationsResponse, EspanderErro
     }
 }
 
+#[tauri::command]
+pub async fn fetch_hub_tools() -> Result<HubToolsResponse, EspanderError> {
+    let Some(url) = tools_endpoint_url() else {
+        return Ok(HubToolsResponse { tools: Vec::new() });
+    };
+
+    let client = reqwest::Client::builder()
+        .user_agent("Espander/0.1.0")
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| EspanderError::Other(format!("HTTP client error: {}", e)))?;
+
+    match client.get(url).send().await {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                if let Ok(data) = resp.json::<HubToolsResponse>().await {
+                    return Ok(data);
+                }
+            }
+            Ok(HubToolsResponse { tools: Vec::new() })
+        }
+        Err(_) => Ok(HubToolsResponse { tools: Vec::new() }),
+    }
+}
+
+#[tauri::command]
+pub async fn fetch_global_texts() -> Result<GlobalTexts, EspanderError> {
+    let defaults = GlobalTexts {
+        more_tools_title: "More Tools".to_string(),
+        more_tools_subtitle: "Useful tools and products from Espander.".to_string(),
+        notifications_title: "Notifications".to_string(),
+        notifications_subtitle: "Messages and announcements from Espander.".to_string(),
+    };
+
+    let Some(url) = global_texts_endpoint_url() else {
+        return Ok(defaults);
+    };
+
+    let client = reqwest::Client::builder()
+        .user_agent("Espander/0.1.0")
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| EspanderError::Other(format!("HTTP client error: {}", e)))?;
+
+    match client.get(url).send().await {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                if let Ok(data) = resp.json::<GlobalTexts>().await {
+                    return Ok(data);
+                }
+            }
+            Ok(defaults)
+        }
+        Err(_) => Ok(defaults),
+    }
+}
+
 fn notifications_endpoint_url() -> Option<String> {
     std::env::var("ESPANDER_NOTIFICATIONS_URL")
         .ok()
@@ -257,6 +372,24 @@ fn updates_endpoint_url() -> Option<String> {
         .map(|url| url.trim().to_string())
         .filter(|url| !url.is_empty())
         .or_else(|| hub_base_url().map(|base| format!("{}/update", base)))
+}
+
+fn tools_endpoint_url() -> Option<String> {
+    std::env::var("ESPANDER_TOOLS_URL")
+        .ok()
+        .or_else(|| option_env!("ESPANDER_TOOLS_URL").map(str::to_string))
+        .map(|url| url.trim().to_string())
+        .filter(|url| !url.is_empty())
+        .or_else(|| hub_base_url().map(|base| format!("{}/tools", base)))
+}
+
+fn global_texts_endpoint_url() -> Option<String> {
+    std::env::var("ESPANDER_GLOBAL_TEXTS_URL")
+        .ok()
+        .or_else(|| option_env!("ESPANDER_GLOBAL_TEXTS_URL").map(str::to_string))
+        .map(|url| url.trim().to_string())
+        .filter(|url| !url.is_empty())
+        .or_else(|| hub_base_url().map(|base| format!("{}/global-texts", base)))
 }
 
 fn is_allowed_update_download(download_url: &str) -> bool {

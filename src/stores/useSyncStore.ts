@@ -11,6 +11,7 @@ interface SyncDetails {
 
 interface SyncStore {
   syncStatus: SyncStatus;
+  syncProgress: number;
   lastSyncAt: string | null;
   isConnected: boolean;
   syncHistory: SyncMeta["sync_history"];
@@ -25,6 +26,7 @@ interface SyncStore {
 
 export const useSyncStore = create<SyncStore>((set) => ({
   syncStatus: "idle",
+  syncProgress: 0,
   lastSyncAt: null,
   isConnected: false,
   syncHistory: [],
@@ -33,11 +35,14 @@ export const useSyncStore = create<SyncStore>((set) => ({
   errorMessage: null,
 
   syncNow: async () => {
-    set({ syncStatus: "syncing", errorMessage: null });
+    set({ syncStatus: "syncing", syncProgress: 10, errorMessage: null });
     try {
+      set({ syncProgress: 35 });
       const result = await apiSyncNow();
+      set({ syncProgress: 75 });
       set({
         syncStatus: result.success ? "success" : "error",
+        syncProgress: result.success ? 90 : 0,
         lastSyncAt: new Date().toISOString(),
         errorMessage: result.success ? null : result.message,
         lastResult: {
@@ -54,9 +59,11 @@ export const useSyncStore = create<SyncStore>((set) => ({
         useCategoryStore.getState().fetchCategories(),
         useSnippetStore.getState().fetchSnippets(),
       ]);
+      set({ syncProgress: result.success ? 100 : 0 });
     } catch (err) {
       set({
         syncStatus: "error",
+        syncProgress: 0,
         errorMessage: err instanceof Error ? err.message : String(err),
       });
     }

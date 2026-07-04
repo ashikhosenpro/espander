@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { openBrowser, type Notification } from "@/lib/tauri";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useUIStore } from "@/stores/useUIStore";
+import { useGlobalTextStore } from "@/stores/useGlobalTextStore";
+import { HtmlNotificationFrame, isHtmlNotification } from "./HtmlNotificationFrame";
 
 function notificationTone(notification: Notification) {
   if (notification.type_name === "warning") {
@@ -19,6 +21,19 @@ function notificationTone(notification: Notification) {
   return "border-sky-500/25 bg-sky-500/[0.06]";
 }
 
+function notificationDate(notification: Notification) {
+  const value = notification.created_at ?? notification.updated_at ?? notification.start_date;
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export function NotificationsPage() {
   const {
     notifications,
@@ -29,10 +44,12 @@ export function NotificationsPage() {
     isRead,
   } = useNotificationStore();
   const { selectedNotificationId, openNotification, clearSelectedNotification } = useUIStore();
+  const { texts, fetchTexts } = useGlobalTextStore();
 
   useEffect(() => {
     fetchNotificationsList();
-  }, [fetchNotificationsList]);
+    fetchTexts();
+  }, [fetchNotificationsList, fetchTexts]);
 
   const selectedNotification = useMemo(
     () => notifications.find((notification) => notification.id === selectedNotificationId) ?? null,
@@ -41,10 +58,11 @@ export function NotificationsPage() {
 
   if (selectedNotification) {
     const read = isRead(selectedNotification.id);
+    const htmlMode = isHtmlNotification(selectedNotification);
 
     return (
-      <div className="h-full overflow-y-auto p-5">
-        <div className="mx-auto max-w-4xl space-y-4">
+      <div className="min-h-full p-5">
+        <div className={cn("mx-auto space-y-4", htmlMode ? "max-w-6xl" : "max-w-4xl")}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Button
               variant="outline"
@@ -67,73 +85,68 @@ export function NotificationsPage() {
             )}
           </div>
 
-          <article
-            className={cn("overflow-hidden rounded-lg border bg-card shadow-sm", notificationTone(selectedNotification))}
-            style={{
-              background: selectedNotification.background_color || undefined,
-              color: selectedNotification.text_color || undefined,
-            }}
-          >
-            {selectedNotification.custom_css && <style>{selectedNotification.custom_css}</style>}
-            <div className="border-b border-border/60 p-5">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="rounded border border-border/60 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {read ? "Read" : "Unread"}
-                </span>
-                <span className="rounded border border-border/60 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {selectedNotification.type_name}
-                </span>
-              </div>
-              <h1 className="text-xl font-semibold tracking-normal text-foreground">
-                {selectedNotification.title}
-              </h1>
+          {htmlMode ? (
+            <div className="relative">
+              <HtmlNotificationFrame
+                notification={selectedNotification}
+                className="block w-full border-0 bg-transparent"
+                onLinkClick={openBrowser}
+              />
             </div>
+          ) : (
+            <article
+              className={cn("overflow-hidden rounded-lg border bg-card shadow-sm", notificationTone(selectedNotification))}
+              style={{
+                background: selectedNotification.background_color || undefined,
+                color: selectedNotification.text_color || undefined,
+              }}
+            >
+              <div className="border-b border-border/60 p-5">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded border border-border/60 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {read ? "Read" : "Unread"}
+                  </span>
+                  <span className="rounded border border-border/60 px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {selectedNotification.type_name}
+                  </span>
+                </div>
+                <h1 className="text-xl font-semibold tracking-normal text-foreground">
+                  {selectedNotification.title}
+                </h1>
+              </div>
 
-            <div className="space-y-4 p-5">
-              {selectedNotification.html_content ? (
-                <div
-                  className="espander-rich-notification text-sm leading-relaxed text-muted-foreground [&_a]:font-medium [&_a]:text-sky-300 [&_a:hover]:text-sky-200 [&_b]:text-foreground [&_strong]:text-foreground [&_code]:rounded [&_code]:bg-background/50 [&_code]:px-1 [&_code]:py-0.5 [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
-                  onClick={(event) => {
-                    const anchor = (event.target as HTMLElement).closest("a");
-                    if (anchor instanceof HTMLAnchorElement && anchor.href) {
-                      event.preventDefault();
-                      openBrowser(anchor.href);
-                    }
-                  }}
-                  dangerouslySetInnerHTML={{ __html: selectedNotification.html_content }}
-                />
-              ) : (
+              <div className="space-y-4 p-5">
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
                   {selectedNotification.message}
                 </p>
-              )}
 
-              {selectedNotification.action_url && selectedNotification.action_label && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  onClick={() => openBrowser(selectedNotification.action_url!)}
-                >
-                  {selectedNotification.action_label}
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-          </article>
+                {selectedNotification.action_url && selectedNotification.action_label && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    onClick={() => openBrowser(selectedNotification.action_url!)}
+                  >
+                    {selectedNotification.action_label}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </article>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto p-5">
+    <div className="min-h-full p-5">
       <div className="mx-auto max-w-5xl space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold tracking-normal">Notifications</h1>
+            <h1 className="text-lg font-semibold tracking-normal">{texts.notifications_title}</h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              Messages and announcements from Espander.
+              {texts.notifications_subtitle}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -190,9 +203,14 @@ export function NotificationsPage() {
                         <span className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                           {read ? "Read" : "Unread"}
                         </span>
+                        {notificationDate(notification) && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {notificationDate(notification)}
+                          </span>
+                        )}
                       </div>
                       <p className="line-clamp-2 text-muted-foreground">
-                        {notification.message}
+                        {isHtmlNotification(notification) ? "HTML notification" : notification.message}
                       </p>
                     </div>
                   </div>

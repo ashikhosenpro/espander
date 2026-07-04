@@ -14,7 +14,6 @@ import {
   Grid3X3,
   Heart,
   Settings,
-  Bell,
   RefreshCw,
   Globe,
   WifiOff,
@@ -22,30 +21,32 @@ import {
   CheckCircle2,
   AlertCircle,
   Info,
+  Puzzle,
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
-import { useNotificationStore } from "@/stores/useNotificationStore";
+import { useToolsStore } from "@/stores/useToolsStore";
+import { useGlobalTextStore } from "@/stores/useGlobalTextStore";
 
 const navItems = [
   { id: "snippets" as const, label: "All Snippets", icon: Grid3X3 },
   { id: "favorites" as const, label: "Favorites", icon: Heart },
-  { id: "notifications" as const, label: "Notifications", icon: Bell },
 ];
 
 export function Sidebar() {
-  const { activeView, setActiveView, sidebarOpen, clearSelectedNotification } = useUIStore();
+  const { activeView, setActiveView, sidebarOpen } = useUIStore();
   const { categories, fetchCategories } = useCategoryStore();
   const { snippets, fetchSnippets, setSearch, setFilter, setFilterFavorite } = useSnippetStore();
-  const { syncStatus, lastSyncAt, lastResult, errorMessage, syncNow } = useSyncStore();
-  const { notifications, isRead, fetchNotificationsList } = useNotificationStore();
+  const { syncStatus, syncProgress, lastSyncAt, lastResult, errorMessage, syncNow } = useSyncStore();
+  const { tools, fetchTools } = useToolsStore();
+  const { texts, fetchTexts } = useGlobalTextStore();
 
   useEffect(() => {
     fetchCategories();
     fetchSnippets();
-    fetchNotificationsList();
-  }, [fetchCategories, fetchSnippets, fetchNotificationsList]);
+    fetchTools();
+    fetchTexts();
+  }, [fetchCategories, fetchSnippets, fetchTools, fetchTexts]);
 
-  const unreadNotifications = notifications.filter((notification) => !isRead(notification.id)).length;
   const favoriteCount = snippets.filter((snippet) => snippet.is_favorite).length;
 
   const snippetCountByCategory = useMemo(() => {
@@ -56,11 +57,8 @@ export function Sidebar() {
     return map;
   }, [snippets]);
 
-  const handleNavClick = (id: "snippets" | "favorites" | "notifications") => {
+  const handleNavClick = (id: "snippets" | "favorites") => {
     setActiveView(id);
-    if (id === "notifications") {
-      clearSelectedNotification();
-    }
     setFilterFavorite(id === "favorites");
     if (id === "snippets") {
       setFilter(null);
@@ -133,11 +131,6 @@ export function Sidebar() {
                   {favoriteCount}
                 </span>
               )}
-              {item.id === "notifications" && unreadNotifications > 0 && (
-                <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-sky-300">
-                  {unreadNotifications}
-                </span>
-              )}
             </button>
           );
         })}
@@ -190,6 +183,24 @@ export function Sidebar() {
           <Settings className="h-4 w-4" />
           <span className="flex-1 text-left">Settings</span>
         </button>
+
+        <button
+          onClick={() => setActiveView("tools")}
+          className={cn(
+            "sidebar-nav-item flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
+            activeView === "tools"
+              ? "bg-sidebar-accent text-sidebar-foreground font-medium"
+              : "text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+          )}
+        >
+          <Puzzle className="h-4 w-4" />
+          <span className="flex-1 text-left">{texts.more_tools_title}</span>
+          {tools.length > 0 && (
+            <span className="text-[11px] text-sidebar-muted tabular-nums">
+              {tools.length}
+            </span>
+          )}
+        </button>
       </nav>
 
       <div className="sidebar-footer p-3 border-t border-border">
@@ -199,11 +210,19 @@ export function Sidebar() {
               <button className="flex w-full items-center gap-2 text-xs">
                 <SyncIcon className={cn("h-3.5 w-3.5", syncColor, syncStatus === "syncing" && "animate-spin")} />
                 <span className="text-sidebar-muted capitalize flex-1 text-left">
-                  {syncStatus === "idle" ? "Idle" : syncStatus === "syncing" ? "Syncing..." : syncStatus === "success" ? "Synced" : "Error"}
+                  {syncStatus === "idle" ? "Idle" : syncStatus === "syncing" ? `Syncing ${syncProgress}%` : syncStatus === "success" ? "Synced" : "Error"}
                 </span>
                 {lastResult && <Info className="h-3 w-3 text-sidebar-muted" />}
               </button>
             </PopoverTrigger>
+            {syncStatus === "syncing" && (
+              <div className="h-1 overflow-hidden rounded-full bg-sidebar-muted/20">
+                <div
+                  className="h-full rounded-full bg-indigo-400 transition-all duration-300"
+                  style={{ width: `${Math.max(8, Math.min(syncProgress, 100))}%` }}
+                />
+              </div>
+            )}
             <PopoverContent side="top" align="start" className="w-56 p-3 text-xs">
               <div className="space-y-2">
                 <h4 className="font-medium text-sm">Last Sync</h4>
