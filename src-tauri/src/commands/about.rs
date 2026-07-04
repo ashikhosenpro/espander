@@ -129,11 +129,14 @@ fn remote_content_url(slug: &str) -> Option<String> {
         .map(|url| url.trim().trim_end_matches('/').to_string())
         .filter(|url| !url.is_empty())
         .map(|base| format!("{}/{}", base, slug))
-        .or_else(|| {
-            std::env::var("ESPANDER_NOTIFICATIONS_URL")
-                .ok()
-                .or_else(|| option_env!("ESPANDER_NOTIFICATIONS_URL").map(str::to_string))
-                .and_then(|url| url.strip_suffix("/notifications").map(str::to_string))
-                .map(|base| format!("{}/content/{}", base, slug))
-        })
+        .or_else(|| hub_base_url().map(|base| format!("{}/content/{}", base, slug)))
+}
+
+fn hub_base_url() -> Option<String> {
+    std::env::var("ESPANDER_NOTIFICATIONS_URL")
+        .ok()
+        .or_else(|| option_env!("ESPANDER_NOTIFICATIONS_URL").map(str::to_string))
+        .map(|url| url.trim().trim_end_matches('/').to_string())
+        .filter(|url| !url.is_empty())
+        .and_then(|url| url.strip_suffix("/notifications").map(str::to_string))
 }

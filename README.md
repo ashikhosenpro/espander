@@ -125,8 +125,6 @@ Build the application:
 npm run tauri:build
 ```
 
----
-
 ## Project Features
 
 - Visual YAML editor

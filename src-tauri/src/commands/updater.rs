@@ -246,7 +246,7 @@ fn notifications_endpoint_url() -> Option<String> {
     std::env::var("ESPANDER_NOTIFICATIONS_URL")
         .ok()
         .or_else(|| option_env!("ESPANDER_NOTIFICATIONS_URL").map(str::to_string))
-        .map(|url| url.trim().to_string())
+        .map(|url| url.trim().trim_end_matches('/').to_string())
         .filter(|url| !url.is_empty())
 }
 
@@ -256,11 +256,7 @@ fn updates_endpoint_url() -> Option<String> {
         .or_else(|| option_env!("ESPANDER_UPDATES_URL").map(str::to_string))
         .map(|url| url.trim().to_string())
         .filter(|url| !url.is_empty())
-        .or_else(|| {
-            notifications_endpoint_url()
-                .and_then(|url| url.strip_suffix("/notifications").map(str::to_string))
-                .map(|base| format!("{}/update", base))
-        })
+        .or_else(|| hub_base_url().map(|base| format!("{}/update", base)))
 }
 
 fn is_allowed_update_download(download_url: &str) -> bool {
@@ -315,9 +311,10 @@ fn telemetry_endpoint_url() -> Option<String> {
         .or_else(|| option_env!("ESPANDER_TELEMETRY_URL").map(str::to_string))
         .map(|url| url.trim().to_string())
         .filter(|url| !url.is_empty())
-        .or_else(|| {
-            notifications_endpoint_url()
-                .and_then(|url| url.strip_suffix("/notifications").map(str::to_string))
-                .map(|base| format!("{}/telemetry", base))
-        })
+        .or_else(|| hub_base_url().map(|base| format!("{}/telemetry", base)))
+}
+
+fn hub_base_url() -> Option<String> {
+    notifications_endpoint_url()
+        .and_then(|url| url.strip_suffix("/notifications").map(str::to_string))
 }

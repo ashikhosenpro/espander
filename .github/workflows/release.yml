@@ -35,6 +35,8 @@ jobs:
         run: npm ci
 
       - name: Build Tauri app
+        env:
+          ESPANDER_NOTIFICATIONS_URL: ${{ secrets.ESPANDER_NOTIFICATIONS_URL }}
         run: npm run tauri:build
 
       - name: Upload macOS artifact
