@@ -85,6 +85,7 @@ export function SettingsPage() {
   const { updater, currentVersion, isChecking, isUpdating, checkUpdates, installUpdate } = useUpdateStore();
   const [localErrorMsg, setLocalErrorMsg] = useState<string | null>(null);
   const [showFallback, setShowFallback] = useState(false);
+  const githubConnected = Boolean(settings.github_repo_url && settings.github_token);
 
   const handleInstallUpdate = async () => {
     setLocalErrorMsg(null);
@@ -773,7 +774,7 @@ export function SettingsPage() {
               </div>
             )}
 
-            {settings.sync_provider === "github" && (
+            {settings.sync_provider === "github" && githubConnected && (
               <div className="space-y-4 pt-3 border-t border-border">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">GitHub Connection</Label>
@@ -882,7 +883,7 @@ export function SettingsPage() {
               </div>
             )}
 
-            {settings.sync_provider !== "github" && (
+            {settings.sync_provider === "github" && !githubConnected && (
               <div className="space-y-4 pt-3 border-t border-border">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">GitHub Connection</Label>

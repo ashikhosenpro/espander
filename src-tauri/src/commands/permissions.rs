@@ -64,7 +64,7 @@ pub async fn get_permission_status(
         title: "Start as startup app".to_string(),
         description: "Optional. Open system startup settings so you can choose whether Espander starts when your computer starts."
             .to_string(),
-        status: "manual".to_string(),
+        status: startup_app_status(),
         action_label: Some("Open".to_string()),
         required: false,
     });
@@ -114,6 +114,57 @@ fn espanso_config_status(config_dir: Option<&str>) -> String {
     } else {
         "missing".to_string()
     }
+}
+
+fn startup_app_status() -> String {
+    if startup_app_enabled() {
+        "granted"
+    } else {
+        "manual"
+    }
+    .to_string()
+}
+
+#[cfg(target_os = "windows")]
+fn startup_app_enabled() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let output = std::process::Command::new("reg")
+        .args([
+            "query",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+            "/v",
+            "Espander",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    output.map(|output| output.status.success()).unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn startup_app_enabled() -> bool {
+    let output = std::process::Command::new("osascript")
+        .args([
+            "-e",
+            r#"tell application "System Events" to get the name of every login item"#,
+        ])
+        .output();
+
+    output
+        .map(|output| {
+            output.status.success()
+                && String::from_utf8_lossy(&output.stdout)
+                    .split(',')
+                    .any(|item| item.trim().eq_ignore_ascii_case("Espander"))
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+fn startup_app_enabled() -> bool {
+    false
 }
 
 fn can_write_dir(path: &std::path::Path) -> bool {
