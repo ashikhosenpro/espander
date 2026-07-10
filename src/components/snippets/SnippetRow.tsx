@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +19,8 @@ import {
   Globe,
   FileText,
   HardDrive,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useSnippetStore } from "@/stores/useSnippetStore";
 import { useCategoryStore } from "@/stores/useCategoryStore";
@@ -40,6 +43,7 @@ const sourceLabels: Record<string, { label: string; icon: typeof HardDrive }> = 
 export function SnippetRow({ snippet, selected, onSelect, onEdit, grid }: SnippetRowProps) {
   const { toggleFavorite, deleteSnippet } = useSnippetStore();
   const { categories } = useCategoryStore();
+  const [showProtectedValue, setShowProtectedValue] = useState(false);
 
   const category = categories.find((c) => c.id === snippet.category_id);
   const sourceInfo = sourceLabels[snippet.source] || sourceLabels.local;
@@ -74,9 +78,21 @@ export function SnippetRow({ snippet, selected, onSelect, onEdit, grid }: Snippe
             </button>
           </div>
         </div>
-        <p className="text-sm text-muted-foreground line-clamp-2 mb-3 font-mono text-xs">
-          {snippet.replace}
-        </p>
+        <div className="mb-3 flex min-h-8 items-start gap-2">
+          <p className="text-sm text-muted-foreground line-clamp-2 font-mono text-xs break-all">
+            {snippet.is_protected && !showProtectedValue ? "••••••••••••" : snippet.replace}
+          </p>
+          {snippet.is_protected && (
+            <button
+              type="button"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowProtectedValue((visible) => !visible)}
+              aria-label={showProtectedValue ? "Mask replacement" : "Show masked replacement"}
+            >
+              {showProtectedValue ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {category && (
@@ -148,8 +164,20 @@ export function SnippetRow({ snippet, selected, onSelect, onEdit, grid }: Snippe
           {snippet.trigger}
         </code>
       </div>
-      <div className="text-sm text-muted-foreground truncate font-mono text-xs">
-        {snippet.replace}
+      <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground font-mono text-xs">
+        <span className="truncate">
+          {snippet.is_protected && !showProtectedValue ? "••••••••••••" : snippet.replace}
+        </span>
+        {snippet.is_protected && (
+          <button
+            type="button"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={() => setShowProtectedValue((visible) => !visible)}
+            aria-label={showProtectedValue ? "Mask replacement" : "Show masked replacement"}
+          >
+            {showProtectedValue ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
+        )}
       </div>
       <div>
         {category && (

@@ -94,6 +94,7 @@ mod tests {
                 description: None,
                 tags: None,
                 source: None,
+                is_protected: false,
             };
             db.create_snippet(input).await.unwrap();
 
@@ -163,6 +164,7 @@ mod tests {
                 description: None,
                 tags: None,
                 source: None,
+                is_protected: false,
             };
             db.create_snippet(input).await.unwrap();
 

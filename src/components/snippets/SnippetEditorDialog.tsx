@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -31,6 +33,8 @@ export function SnippetEditorDialog() {
   const [replace, setReplace] = useState("");
   const [categoryId, setCategoryId] = useState("personal");
   const [saving, setSaving] = useState(false);
+  const [isProtected, setIsProtected] = useState(false);
+  const [showProtectedValue, setShowProtectedValue] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const editingSnippet = editorMode === "edit" && editorSnippetId
@@ -45,13 +49,16 @@ export function SnippetEditorDialog() {
       setTrigger(editingSnippet.trigger);
       setReplace(editingSnippet.replace);
       setCategoryId(editingSnippet.category_id);
+      setIsProtected(editingSnippet.is_protected);
     } else {
       setTrigger("");
       setReplace("");
       setCategoryId(filterCategory && categories.some((c) => c.id === filterCategory)
         ? filterCategory
         : categories[0]?.id || "personal");
+      setIsProtected(false);
     }
+    setShowProtectedValue(false);
   }, [editorMode, editingSnippet, editorOpen]);
 
   const handleSave = async () => {
@@ -65,6 +72,7 @@ export function SnippetEditorDialog() {
           trigger: trigger.trim(),
           replace,
           category_id: categoryId,
+          is_protected: isProtected,
         };
         await createSnippet(input);
       } else if (editorSnippetId) {
@@ -72,6 +80,7 @@ export function SnippetEditorDialog() {
           trigger: trigger.trim(),
           replace,
           category_id: categoryId,
+          is_protected: isProtected,
         };
         await updateSnippet(editorSnippetId, input);
       }
@@ -86,7 +95,11 @@ export function SnippetEditorDialog() {
 
   return (
     <Dialog open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
-      <DialogContent className="sm:max-w-[540px]">
+      <DialogContent
+        className="sm:max-w-[540px]"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>
             {editorMode === "create" ? "New Snippet" : "Edit Snippet"}
@@ -116,12 +129,50 @@ export function SnippetEditorDialog() {
 
           <div className="space-y-2">
             <Label htmlFor="replace">Replacement</Label>
-            <textarea
-              id="replace"
-              className="flex min-h-[120px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
-              placeholder="What should the trigger expand to?"
-              value={replace}
-              onChange={(e) => setReplace(e.target.value)}
+            <div className="relative">
+              <textarea
+                id="replace"
+                className="flex min-h-[120px] w-full rounded-lg border border-input bg-transparent px-3 py-2 pr-11 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                placeholder="What should the trigger expand to?"
+                value={replace}
+                onChange={(e) => setReplace(e.target.value)}
+                style={isProtected && !showProtectedValue
+                  ? ({ WebkitTextSecurity: "disc" } as CSSProperties)
+                  : undefined}
+              />
+              {isProtected && (
+                <button
+                  type="button"
+                  className="absolute right-3 top-3 text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={() => setShowProtectedValue((visible) => !visible)}
+                  aria-label={showProtectedValue ? "Mask replacement" : "Show masked replacement"}
+                >
+                  {showProtectedValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Line breaks are preserved. Add <code className="font-mono">$|$</code> once to choose where the cursor lands after expansion.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-3">
+            <div className="flex items-start gap-3 pr-4">
+              <EyeOff className="mt-0.5 h-4 w-4 text-indigo-400" />
+              <div>
+                <Label htmlFor="mask-replacement">Mask replacement</Label>
+                <p className="text-xs text-muted-foreground">
+                  Hide this value in lists and previews. Useful during screen sharing or recording.
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="mask-replacement"
+              checked={isProtected}
+              onCheckedChange={(checked) => {
+                setIsProtected(checked);
+                setShowProtectedValue(false);
+              }}
             />
           </div>
 
@@ -141,7 +192,7 @@ export function SnippetEditorDialog() {
             </Select>
           </div>
 
-          {replace && (
+          {replace && (!isProtected || showProtectedValue) && (
             <div className="space-y-2">
               <Label>Preview</Label>
               <div className="rounded-lg border border-border bg-muted/30 p-3">

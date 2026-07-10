@@ -11,6 +11,8 @@ pub struct Snippet {
     pub tags: Vec<String>,
     pub is_favorite: bool,
     pub is_paused: bool,
+    #[serde(default)]
+    pub is_protected: bool,
     #[serde(default = "default_source")]
     pub source: String,
     pub created_at: DateTime<Utc>,
@@ -30,6 +32,8 @@ pub struct CreateSnippetInput {
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
     pub source: Option<String>,
+    #[serde(default)]
+    pub is_protected: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +45,7 @@ pub struct UpdateSnippetInput {
     pub tags: Option<Vec<String>>,
     pub is_favorite: Option<bool>,
     pub is_paused: Option<bool>,
+    pub is_protected: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

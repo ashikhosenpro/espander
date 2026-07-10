@@ -143,7 +143,7 @@ export function SnippetListPage() {
   return (
     <div className="snippets-page all-snippets-page p-4 space-y-4">
       {selectedIds.size > 0 && (
-        <div className="selection-bar flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/50 text-sm">
+        <div className="selection-bar sticky top-0 z-20 flex items-center gap-3 rounded-lg border border-border/70 bg-card/95 px-3 py-2.5 text-sm shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/85">
           <span className="text-muted-foreground text-xs">
             {selectedIds.size} selected
           </span>

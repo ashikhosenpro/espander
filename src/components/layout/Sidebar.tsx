@@ -4,7 +4,17 @@ import { useSyncStore } from "@/stores/useSyncStore";
 import { useSnippetStore } from "@/stores/useSnippetStore";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
@@ -22,8 +32,9 @@ import {
   AlertCircle,
   Info,
   Puzzle,
+  Plus,
 } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useToolsStore } from "@/stores/useToolsStore";
 import { useGlobalTextStore } from "@/stores/useGlobalTextStore";
 
@@ -34,11 +45,15 @@ const navItems = [
 
 export function Sidebar() {
   const { activeView, setActiveView, sidebarOpen } = useUIStore();
-  const { categories, fetchCategories } = useCategoryStore();
+  const { categories, fetchCategories, createCategory } = useCategoryStore();
   const { snippets, fetchSnippets, setSearch, setFilter, setFilterFavorite } = useSnippetStore();
   const { syncStatus, syncProgress, lastSyncAt, lastResult, errorMessage, syncNow } = useSyncStore();
   const { tools, fetchTools } = useToolsStore();
   const { texts, fetchTexts } = useGlobalTextStore();
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -72,6 +87,31 @@ export function Sidebar() {
     setFilterFavorite(false);
   };
 
+  const closeCategoryDialog = () => {
+    if (creatingCategory) return;
+    setCategoryDialogOpen(false);
+    setNewCategoryName("");
+    setCategoryError(null);
+  };
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name || creatingCategory) return;
+
+    setCreatingCategory(true);
+    setCategoryError(null);
+    try {
+      const category = await createCategory(name);
+      setCreatingCategory(false);
+      closeCategoryDialog();
+      handleCategoryClick(category.id);
+    } catch (error) {
+      setCategoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const syncIcon = {
     idle: Globe,
     syncing: Loader2,
@@ -93,18 +133,18 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "sidebar flex flex-col border-r border-border bg-sidebar transition-all duration-200",
+        "sidebar flex min-h-0 flex-col border-r border-border bg-sidebar transition-all duration-200",
         sidebarOpen ? "w-60" : "w-0 overflow-hidden"
       )}
     >
-      <div className="sidebar-header flex h-14 items-center gap-2.5 px-5 border-b border-border">
+      <div className="sidebar-header flex h-14 shrink-0 items-center gap-2.5 px-5 border-b border-border">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shadow-sm">
           <span className="text-xs font-bold text-white">E</span>
         </div>
         <span className="font-semibold text-sm text-sidebar-foreground">Espander</span>
       </div>
 
-      <nav className="sidebar-nav flex-1 overflow-y-auto scrollbar-thin p-3 space-y-1">
+      <nav className="sidebar-nav flex min-h-0 flex-1 flex-col overflow-hidden p-3">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -137,11 +177,22 @@ export function Sidebar() {
 
         <Separator className="my-3" />
 
-        <div className="px-3 py-1.5 text-xs font-medium text-sidebar-muted uppercase tracking-wider">
-          Categories
+        <div className="flex items-center justify-between px-3 py-1.5">
+          <span className="text-xs font-medium text-sidebar-muted uppercase tracking-wider">
+            Categories
+          </span>
+          <button
+            type="button"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            onClick={() => setCategoryDialogOpen(true)}
+            aria-label="Create category"
+            title="Create category"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </div>
 
-        <div className="category-list space-y-0.5">
+        <div className="category-list min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1 scrollbar-thin">
           {categories.map((cat) => {
             const count = snippetCountByCategory[cat.id] || 0;
             const isActive = useSnippetStore.getState().filterCategory === cat.id;
@@ -203,7 +254,7 @@ export function Sidebar() {
         </button>
       </nav>
 
-      <div className="sidebar-footer p-3 border-t border-border">
+      <div className="sidebar-footer shrink-0 p-3 border-t border-border">
         <div className="sync-status rounded-lg bg-sidebar-accent/50 p-3 space-y-2">
           <Popover>
             <PopoverTrigger asChild>
@@ -270,6 +321,54 @@ export function Sidebar() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={categoryDialogOpen} onOpenChange={(open) => !open && closeCategoryDialog()}>
+        <DialogContent
+          className="sm:max-w-[420px]"
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>New Category</DialogTitle>
+            <DialogDescription>
+              Create a category to organize your snippets.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="sidebar-category-name">Category name</Label>
+            <Input
+              id="sidebar-category-name"
+              value={newCategoryName}
+              onChange={(event) => setNewCategoryName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleCreateCategory();
+                }
+              }}
+              placeholder="e.g. Work"
+              autoFocus
+              disabled={creatingCategory}
+            />
+            {categoryError && (
+              <p className="text-xs font-medium text-red-400">{categoryError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeCategoryDialog} disabled={creatingCategory}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCreateCategory()}
+              disabled={!newCategoryName.trim() || creatingCategory}
+            >
+              {creatingCategory ? "Creating..." : "Create Category"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

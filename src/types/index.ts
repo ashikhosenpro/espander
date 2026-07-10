@@ -7,6 +7,7 @@ export interface Snippet {
   tags: string[];
   is_favorite: boolean;
   is_paused: boolean;
+  is_protected: boolean;
   source: string;
   created_at: string;
   updated_at: string;
@@ -20,6 +21,7 @@ export interface CreateSnippetInput {
   description?: string;
   tags?: string[];
   source?: string;
+  is_protected?: boolean;
 }
 
 export interface UpdateSnippetInput {
@@ -30,6 +32,7 @@ export interface UpdateSnippetInput {
   tags?: string[];
   is_favorite?: boolean;
   is_paused?: boolean;
+  is_protected?: boolean;
 }
 
 export interface Category {

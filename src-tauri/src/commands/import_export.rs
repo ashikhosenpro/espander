@@ -29,6 +29,8 @@ struct PortableSnippet {
     description: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     tags: Vec<String>,
+    #[serde(default)]
+    is_protected: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -44,6 +46,8 @@ struct EspansoYamlMatch {
     description: Option<String>,
     #[serde(default)]
     tags: Option<Vec<String>>,
+    #[serde(default)]
+    is_protected: bool,
 }
 
 #[tauri::command]
@@ -145,6 +149,10 @@ async fn import_csv(db: &Database, content: &str) -> Result<ImportResult, Espand
             description,
             tags,
             source: Some("local".to_string()),
+            is_protected: row
+                .get(5)
+                .map(|value| value.trim().eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
         };
 
         match db.create_snippet(input).await {
@@ -192,6 +200,7 @@ async fn import_yaml(
             category: category_id.clone(),
             description: m.description,
             tags: m.tags.unwrap_or_default(),
+            is_protected: m.is_protected,
         })
         .collect();
 
@@ -221,6 +230,7 @@ async fn import_portable_snippets(
             description: snippet.description,
             tags: Some(snippet.tags),
             source: Some("local".to_string()),
+            is_protected: snippet.is_protected,
         };
 
         match db.create_snippet(input).await {
@@ -237,15 +247,16 @@ async fn import_portable_snippets(
 }
 
 fn export_csv(snippets: &[Snippet]) -> String {
-    let mut csv = "trigger,replace,category,description,tags\n".to_string();
+    let mut csv = "trigger,replace,category,description,tags,is_protected\n".to_string();
     for s in snippets {
         csv.push_str(&format!(
-            "{},{},{},{},{}\n",
+            "{},{},{},{},{},{}\n",
             csv_escape(&s.trigger),
             csv_escape(&s.replace),
             csv_escape(&s.category_id),
             csv_escape(&s.description),
             csv_escape(&s.tags.join("|")),
+            s.is_protected,
         ));
     }
     csv
@@ -275,6 +286,7 @@ async fn export_yaml(db: &Database, snippets: &[Snippet]) -> Result<String, Espa
                 Some(s.description.clone())
             },
             tags: s.tags.clone(),
+            is_protected: s.is_protected,
         })
         .collect();
 

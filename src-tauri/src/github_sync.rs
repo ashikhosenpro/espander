@@ -47,6 +47,8 @@ struct YamlMatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     is_paused: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    is_protected: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     updated_at: Option<String>,
 }
 
@@ -272,6 +274,7 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
                             tags: m.tags.unwrap_or_default(),
                             is_favorite: m.is_favorite.unwrap_or(false),
                             is_paused: m.is_paused.unwrap_or(false),
+                            is_protected: m.is_protected.unwrap_or(false),
                             source: "github".to_string(),
                             created_at: updated_at,
                             updated_at,
@@ -358,6 +361,7 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
                     || l_snip.tags != r_snip.tags
                     || l_snip.is_favorite != r_snip.is_favorite
                     || l_snip.is_paused != r_snip.is_paused
+                    || l_snip.is_protected != r_snip.is_protected
                 {
                     let old_id = l_snip.id.clone();
                     l_snip = r_snip;
@@ -431,6 +435,7 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
                 },
                 is_favorite: Some(s.is_favorite),
                 is_paused: Some(s.is_paused),
+                is_protected: Some(s.is_protected),
                 updated_at: Some(s.updated_at.to_rfc3339()),
             })
             .collect();

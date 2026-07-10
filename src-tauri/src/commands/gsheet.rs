@@ -98,6 +98,7 @@ pub async fn import_from_gsheet_url(
                     description: None,
                     tags: None,
                     source: Some("google_sheets".to_string()),
+                    is_protected: false,
                 };
                 match db.create_snippet(input).await {
                     Ok(_) => imported += 1,

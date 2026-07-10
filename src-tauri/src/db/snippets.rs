@@ -70,6 +70,7 @@ impl Database {
             tags: input.tags.unwrap_or_default(),
             is_favorite: false,
             is_paused: false,
+            is_protected: input.is_protected,
             source: input.source.unwrap_or_else(|| "local".to_string()),
             created_at: now,
             updated_at: now,
@@ -164,6 +165,9 @@ impl Database {
         if let Some(is_paused) = input.is_paused {
             snippet.is_paused = is_paused;
         }
+        if let Some(is_protected) = input.is_protected {
+            snippet.is_protected = is_protected;
+        }
         snippet.updated_at = Utc::now();
         if snippet.sync_status == SyncStatus::Synced {
             snippet.sync_status = SyncStatus::Modified;
@@ -229,6 +233,7 @@ impl Database {
             tags: original.tags.clone(),
             is_favorite: false,
             is_paused: false,
+            is_protected: original.is_protected,
             source: original.source.clone(),
             created_at: now,
             updated_at: now,
