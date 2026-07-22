@@ -8,6 +8,18 @@ interface IsolatedHtmlContentProps {
 function prepareHtml(html: string) {
   const parsed = new DOMParser().parseFromString(html, "text/html");
   parsed.querySelectorAll("script, base, meta[http-equiv]").forEach((node) => node.remove());
+  parsed.querySelectorAll("*").forEach((node) => {
+    Array.from(node.attributes).forEach((attribute) => {
+      if (/^on/i.test(attribute.name)) node.removeAttribute(attribute.name);
+      if ((attribute.name === "href" || attribute.name === "src") && /^\s*javascript:/i.test(attribute.value)) {
+        node.removeAttribute(attribute.name);
+      }
+    });
+  });
+  parsed.querySelectorAll("iframe").forEach((iframe) => {
+    iframe.removeAttribute("srcdoc");
+    iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
+  });
 
   const headStyles = Array.from(parsed.head.querySelectorAll("style, link[rel='stylesheet']"))
     .map((node) => node.outerHTML)
