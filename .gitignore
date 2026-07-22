@@ -26,7 +26,8 @@ src-tauri/target/**/*
 *.mobileprovision
 
 # Private production control hub (not part of the open-source desktop app)
-/espander-notifications/
+# The wildcard also excludes accidental copies such as "espander-notifications 2".
+/espander-notifications*/
 /espander-control-hub-*.zip
 
 # Generated platform-specific Tauri schema
