@@ -12,6 +12,7 @@ import type {
   DeviceFlowResponse,
   OAuthResult,
   PermissionCheck,
+  GitHubRepo,
 } from "@/types";
 
 // Snippets
@@ -75,6 +76,10 @@ export const startGitHubOAuth = () =>
   invoke<DeviceFlowResponse>("start_github_oauth");
 export const pollGitHubOAuth = (deviceCode: string, interval: number) =>
   invoke<OAuthResult>("poll_github_oauth", { deviceCode, interval });
+export const getGitHubUsername = (token?: string) =>
+  invoke<string>("get_github_username", { token });
+export const listGitHubRepos = (token?: string) =>
+  invoke<GitHubRepo[]>("list_github_repos", { token });
 
 // Google Sheets
 export const validateGSheetUrl = (url: string) =>

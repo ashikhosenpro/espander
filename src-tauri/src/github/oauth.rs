@@ -3,127 +3,70 @@ use serde::Deserialize;
 use crate::db::schema::{DeviceFlowResponse, OAuthResult};
 use crate::error::EspanderError;
 
-const CLIENT_ID: &str = "Iv23li8kY6NXEMIuPk4q"; // Espander GitHub OAuth App
-
 #[derive(Debug, Deserialize)]
-struct DeviceCodeResponse {
-    device_code: String,
-    user_code: String,
-    verification_uri: String,
-    interval: u32,
-}
-
-#[derive(Debug, Deserialize)]
-struct AccessTokenResponse {
+struct HubOAuthStatus {
+    success: bool,
     access_token: Option<String>,
     error: Option<String>,
-    #[allow(dead_code)]
-    error_description: Option<String>,
+}
+
+fn hub_base_url() -> Result<String, EspanderError> {
+    let notifications = std::env::var("ESPANDER_NOTIFICATIONS_URL")
+        .ok()
+        .or_else(|| option_env!("ESPANDER_NOTIFICATIONS_URL").map(str::to_string))
+        .map(|value| value.trim().trim_end_matches('/').to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| EspanderError::OAuth("Espander Control Hub is not configured in this build.".to_string()))?;
+
+    notifications
+        .strip_suffix("/notifications")
+        .map(str::to_string)
+        .ok_or_else(|| EspanderError::OAuth("Espander Control Hub URL is invalid.".to_string()))
 }
 
 pub async fn start_device_flow() -> Result<DeviceFlowResponse, EspanderError> {
-    let client = reqwest::Client::new();
-    let resp = client
-        .post("https://github.com/login/device/code")
+    let url = format!("{}/github/oauth/start", hub_base_url()?);
+    let response = reqwest::Client::new()
+        .post(url)
         .header("Accept", "application/json")
         .header("User-Agent", "Espander-App")
-        .form(&[("client_id", CLIENT_ID), ("scope", "repo")])
         .send()
         .await
-        .map_err(|e| EspanderError::OAuth(format!("Failed to start device flow: {}", e)))?;
-
-    let status = resp.status();
-    let body_text = resp.text().await.map_err(|e| {
-        EspanderError::OAuth(format!("Failed to read device flow response body: {}", e))
-    })?;
-
+        .map_err(|e| EspanderError::OAuth(format!("Failed to contact Espander Control Hub: {}", e)))?;
+    let status = response.status();
+    let body = response.text().await.map_err(|e| EspanderError::OAuth(format!("Failed to read OAuth response: {}", e)))?;
     if !status.is_success() {
-        return Err(EspanderError::OAuth(format!(
-            "GitHub returned HTTP error status {}: {}",
-            status, body_text
-        )));
+        return Err(EspanderError::OAuth(format!("Espander Control Hub returned HTTP {}: {}", status, body)));
     }
-
-    let device: DeviceCodeResponse = serde_json::from_str(&body_text).map_err(|e| {
-        // Try parsing as standard GitHub error response
-        #[derive(Deserialize)]
-        struct GitHubErrorResponse {
-            error: Option<String>,
-            error_description: Option<String>,
-        }
-        if let Ok(err_resp) = serde_json::from_str::<GitHubErrorResponse>(&body_text) {
-            if let Some(err) = err_resp.error {
-                let desc = err_resp.error_description.unwrap_or_default();
-                return EspanderError::OAuth(format!("GitHub OAuth Error ({}): {}", err, desc));
-            }
-        }
-        EspanderError::OAuth(format!(
-            "Failed to parse device flow response: {}. Raw response: {}",
-            e, body_text
-        ))
-    })?;
-
-    Ok(DeviceFlowResponse {
-        device_code: device.device_code,
-        user_code: device.user_code,
-        verification_uri: device.verification_uri,
-        interval: device.interval,
-    })
+    serde_json::from_str(&body).map_err(|e| EspanderError::OAuth(format!("Invalid OAuth response: {}", e)))
 }
 
-pub async fn poll_for_token(
-    device_code: &str,
-    interval: u32,
-) -> Result<OAuthResult, EspanderError> {
+pub async fn poll_for_token(device_code: &str, interval: u32) -> Result<OAuthResult, EspanderError> {
+    let url = format!("{}/github/oauth/status", hub_base_url()?);
+    let client = reqwest::Client::new();
     loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(interval as u64)).await;
-
-        let client = reqwest::Client::new();
-        let resp = client
-            .post("https://github.com/login/oauth/access_token")
+        tokio::time::sleep(tokio::time::Duration::from_secs(interval.max(2) as u64)).await;
+        let response = client
+            .post(&url)
             .header("Accept", "application/json")
             .header("User-Agent", "Espander-App")
-            .form(&[
-                ("client_id", CLIENT_ID),
-                ("device_code", device_code),
-                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ])
+            .form(&[("device_code", device_code)])
             .send()
             .await
-            .map_err(|e| EspanderError::OAuth(format!("Polling failed: {}", e)))?;
-
-        let body_text = resp.text().await.map_err(|e| {
-            EspanderError::OAuth(format!("Failed to read token response body: {}", e))
-        })?;
-
-        let token: AccessTokenResponse = serde_json::from_str(&body_text).map_err(|e| {
-            EspanderError::OAuth(format!(
-                "Failed to parse token response: {}. Raw response: {}",
-                e, body_text
-            ))
-        })?;
-
-        match (token.access_token, token.error.as_deref()) {
-            (Some(token), _) => {
-                return Ok(OAuthResult {
-                    success: true,
-                    access_token: Some(token),
-                    error: None,
-                });
-            }
-            (_, Some("authorization_pending")) => {
-                continue;
-            }
-            (_, Some(error)) => {
-                return Ok(OAuthResult {
-                    success: false,
-                    access_token: None,
-                    error: Some(error.to_string()),
-                });
-            }
-            (None, None) => {
-                continue;
-            }
+            .map_err(|e| EspanderError::OAuth(format!("OAuth status check failed: {}", e)))?;
+        let status = response.status();
+        let body = response.text().await.map_err(|e| EspanderError::OAuth(format!("Failed to read OAuth status: {}", e)))?;
+        if !status.is_success() {
+            return Err(EspanderError::OAuth(format!("Espander Control Hub returned HTTP {}: {}", status, body)));
         }
+        let result: HubOAuthStatus = serde_json::from_str(&body)
+            .map_err(|e| EspanderError::OAuth(format!("Invalid OAuth status response: {}", e)))?;
+        if result.success {
+            return Ok(OAuthResult { success: true, access_token: result.access_token, error: None });
+        }
+        if result.error.as_deref() == Some("authorization_pending") {
+            continue;
+        }
+        return Ok(OAuthResult { success: false, access_token: None, error: result.error });
     }
 }

@@ -4,6 +4,7 @@ export interface Snippet {
   replace: string;
   category_id: string;
   description: string;
+  notes?: string;
   tags: string[];
   is_favorite: boolean;
   is_paused: boolean;
@@ -19,6 +20,7 @@ export interface CreateSnippetInput {
   replace: string;
   category_id?: string;
   description?: string;
+  notes?: string;
   tags?: string[];
   source?: string;
   is_protected?: boolean;
@@ -29,6 +31,7 @@ export interface UpdateSnippetInput {
   replace?: string;
   category_id?: string;
   description?: string;
+  notes?: string;
   tags?: string[];
   is_favorite?: boolean;
   is_paused?: boolean;

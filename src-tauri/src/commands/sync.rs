@@ -237,7 +237,7 @@ pub async fn test_github_connection(
     if token_val.is_empty() {
         return Ok(TestConnectionResult {
             success: false,
-            message: "Step 3 Failed: Token is empty or invalid. Please provide a valid Fine-grained Personal Access Token.".to_string(),
+            message: "Step 3 Failed: GitHub access token is unavailable. Please reconnect your GitHub account and try again.".to_string(),
             default_branch: None,
         });
     }
@@ -265,7 +265,7 @@ pub async fn test_github_connection(
     if !user_status.is_success() {
         return Ok(TestConnectionResult {
             success: false,
-            message: format!("Step 3 Failed: The Personal Access Token is invalid or expired (GitHub returned HTTP status {}).", user_status),
+            message: format!("Step 3 Failed: The GitHub authorization is invalid or expired (GitHub returned HTTP status {}). Please reconnect your account.", user_status),
             default_branch: None,
         });
     }
@@ -470,4 +470,28 @@ pub async fn test_github_connection(
         message: format!("Connection Test Successful! All checks passed: valid URL, authenticated token, correct repository, active branch '{}', and full read/write permissions verified.", detected_branch),
         default_branch: Some(detected_branch),
     })
+}
+
+#[tauri::command]
+pub async fn get_github_username(token: Option<String>) -> Result<String, EspanderError> {
+    let t = match token {
+        Some(val) if !val.is_empty() => val,
+        _ => crate::db::settings::get_secure_token().ok_or_else(|| {
+            EspanderError::SyncFailed("No GitHub token configured".to_string())
+        })?,
+    };
+    let api = crate::github::api::GitHubApi::new(t);
+    api.get_user().await
+}
+
+#[tauri::command]
+pub async fn list_github_repos(token: Option<String>) -> Result<Vec<crate::db::schema::GitHubRepo>, EspanderError> {
+    let t = match token {
+        Some(val) if !val.is_empty() => val,
+        _ => crate::db::settings::get_secure_token().ok_or_else(|| {
+            EspanderError::SyncFailed("No GitHub token configured".to_string())
+        })?,
+    };
+    let api = crate::github::api::GitHubApi::new(t);
+    api.list_repos().await
 }

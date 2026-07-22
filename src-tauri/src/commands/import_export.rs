@@ -27,6 +27,8 @@ struct PortableSnippet {
     category: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    notes: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     tags: Vec<String>,
     #[serde(default)]
@@ -132,8 +134,12 @@ async fn import_csv(db: &Database, content: &str) -> Result<ImportResult, Espand
             .get(3)
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
-        let tags = row
+        let notes = row
             .get(4)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let tags = row
+            .get(5)
             .map(|s| {
                 s.split('|')
                     .map(|tag| tag.trim().to_string())
@@ -147,10 +153,11 @@ async fn import_csv(db: &Database, content: &str) -> Result<ImportResult, Espand
             replace: replace.to_string(),
             category_id: Some(category_id),
             description,
+            notes,
             tags,
             source: Some("local".to_string()),
             is_protected: row
-                .get(5)
+                .get(6)
                 .map(|value| value.trim().eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
         };
@@ -199,6 +206,7 @@ async fn import_yaml(
             replace: m.replace,
             category: category_id.clone(),
             description: m.description,
+            notes: None,
             tags: m.tags.unwrap_or_default(),
             is_protected: m.is_protected,
         })
@@ -228,6 +236,7 @@ async fn import_portable_snippets(
             replace: snippet.replace,
             category_id: Some(category_id),
             description: snippet.description,
+            notes: snippet.notes,
             tags: Some(snippet.tags),
             source: Some("local".to_string()),
             is_protected: snippet.is_protected,
@@ -247,14 +256,15 @@ async fn import_portable_snippets(
 }
 
 fn export_csv(snippets: &[Snippet]) -> String {
-    let mut csv = "trigger,replace,category,description,tags,is_protected\n".to_string();
+    let mut csv = "trigger,replace,category,description,notes,tags,is_protected\n".to_string();
     for s in snippets {
         csv.push_str(&format!(
-            "{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{}\n",
             csv_escape(&s.trigger),
             csv_escape(&s.replace),
             csv_escape(&s.category_id),
             csv_escape(&s.description),
+            csv_escape(s.notes.as_deref().unwrap_or("")),
             csv_escape(&s.tags.join("|")),
             s.is_protected,
         ));
@@ -285,6 +295,7 @@ async fn export_yaml(db: &Database, snippets: &[Snippet]) -> Result<String, Espa
             } else {
                 Some(s.description.clone())
             },
+            notes: s.notes.clone(),
             tags: s.tags.clone(),
             is_protected: s.is_protected,
         })

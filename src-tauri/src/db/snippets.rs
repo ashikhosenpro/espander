@@ -67,6 +67,7 @@ impl Database {
                 }
             },
             description: input.description.unwrap_or_default(),
+            notes: input.notes,
             tags: input.tags.unwrap_or_default(),
             is_favorite: false,
             is_paused: false,
@@ -156,6 +157,9 @@ impl Database {
         if let Some(description) = input.description {
             snippet.description = description;
         }
+        if let Some(notes) = input.notes {
+            snippet.notes = if notes.trim().is_empty() { None } else { Some(notes) };
+        }
         if let Some(tags) = input.tags {
             snippet.tags = tags;
         }
@@ -230,6 +234,7 @@ impl Database {
             replace: original.replace.clone(),
             category_id: original.category_id.clone(),
             description: original.description.clone(),
+            notes: original.notes.clone(),
             tags: original.tags.clone(),
             is_favorite: false,
             is_paused: false,

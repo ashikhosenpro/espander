@@ -25,6 +25,13 @@ src-tauri/target/**/*
 *.p12
 *.mobileprovision
 
+# Private production control hub (not part of the open-source desktop app)
+/espander-notifications/
+/espander-control-hub-*.zip
+
+# Generated platform-specific Tauri schema
+/src-tauri/gen/schemas/windows-schema.json
+
 # OS/editor noise
 *.log
 .DS_Store

@@ -96,6 +96,7 @@ pub async fn import_from_gsheet_url(
                     replace,
                     category_id: None,
                     description: None,
+                    notes: None,
                     tags: None,
                     source: Some("google_sheets".to_string()),
                     is_protected: false,

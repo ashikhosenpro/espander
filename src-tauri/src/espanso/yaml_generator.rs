@@ -72,6 +72,7 @@ mod tests {
             replace: replace.into(),
             category_id: "personal".into(),
             description: String::new(),
+            notes: None,
             tags: vec![],
             is_favorite: false,
             is_paused: false,

@@ -53,6 +53,7 @@ export function SnippetListPage() {
 
   const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
   const [targetCategoryId, setTargetCategoryId] = useState("");
+  const [viewingNotes, setViewingNotes] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSnippets();
@@ -206,7 +207,7 @@ export function SnippetListPage() {
 
       {viewMode === "list" ? (
         <div className="snippet-table rounded-xl border border-border overflow-hidden">
-          <div className="snippet-table-header grid grid-cols-[32px_0.8fr_1.2fr_110px_90px_110px_72px] gap-3 px-4 py-3 bg-muted/30 border-b border-border items-center">
+          <div className="snippet-table-header grid grid-cols-[32px_0.8fr_1.2fr_60px_110px_90px_110px_72px] gap-3 px-4 py-3 bg-muted/30 border-b border-border items-center">
             <Checkbox
               checked={selectedIds.size === snippets.length}
               onCheckedChange={(checked) => {
@@ -217,6 +218,9 @@ export function SnippetListPage() {
             <SortHeader label="Trigger" field="trigger" />
             <div className="text-xs font-medium text-muted-foreground">
               Replacement
+            </div>
+            <div className="text-xs font-medium text-muted-foreground text-center">
+              Notes
             </div>
             <SortHeader label="Category" field="category" />
             <div className="text-xs font-medium text-muted-foreground">
@@ -233,6 +237,7 @@ export function SnippetListPage() {
                 selected={selectedIds.has(snippet.id)}
                 onSelect={() => useSnippetStore.getState().toggleSelect(snippet.id)}
                 onEdit={() => openEditor("edit", snippet.id)}
+                onViewNotes={setViewingNotes}
               />
             ))}
           </div>
@@ -246,6 +251,7 @@ export function SnippetListPage() {
               selected={selectedIds.has(snippet.id)}
               onSelect={() => useSnippetStore.getState().toggleSelect(snippet.id)}
               onEdit={() => openEditor("edit", snippet.id)}
+              onViewNotes={setViewingNotes}
               grid
             />
           ))}
@@ -293,6 +299,25 @@ export function SnippetListPage() {
               }}
             >
               Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingNotes} onOpenChange={(open) => !open && setViewingNotes(null)}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>Snippet Notes</DialogTitle>
+            <DialogDescription>
+              Additional context and documentation for this snippet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto font-sans">
+            {viewingNotes}
+          </div>
+          <DialogFooter>
+            <Button size="sm" onClick={() => setViewingNotes(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

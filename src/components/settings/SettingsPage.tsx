@@ -31,8 +31,12 @@ import {
   openBrowser,
   openPermissionSettings,
   testGithubConnection,
+  startGitHubOAuth,
+  pollGitHubOAuth,
+  getGitHubUsername,
+  listGitHubRepos,
 } from "@/lib/tauri";
-import type { PermissionCheck } from "@/types";
+import type { PermissionCheck, GitHubRepo } from "@/types";
 import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   Settings,
@@ -107,9 +111,20 @@ export function SettingsPage() {
   const [snippetsCountInCat, setSnippetsCountInCat] = useState(0);
   const [moveDestCatId, setMoveDestCatId] = useState("");
 
-  // GitHub Integration Hooks and States (Manual Token Flow)
+  // GitHub Integration Hooks and States (Manual Token Flow + OAuth Device Flow)
   const [githubRepoUrl, setGithubRepoUrl] = useState(settings.github_repo_url || "");
   const [githubToken, setGithubToken] = useState(settings.github_token || "");
+
+  const [authMethod, setAuthMethod] = useState<"oauth" | "pat">("oauth");
+  const [deviceFlow, setDeviceFlow] = useState<{ user_code: string; verification_uri: string; device_code: string; interval: number } | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [oauthAccessToken, setOauthAccessToken] = useState<string | null>(null);
+
+  const [repos, setRepos] = useState<GitHubRepo[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [repoSearch, setRepoSearch] = useState("");
+  const [showRepoSelector, setShowRepoSelector] = useState(false);
 
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; default_branch?: string } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -151,10 +166,19 @@ export function SettingsPage() {
     try {
       const res = await handleTestConnection();
       if (res && res.success) {
+        // Fetch username for PAT
+        let username = null;
+        try {
+          username = await getGitHubUsername(githubToken);
+        } catch (e) {
+          console.error("Failed to fetch username for PAT:", e);
+        }
+
         await updateSettings({
           github_repo_url: githubRepoUrl,
           github_token: githubToken,
           github_branch: res.default_branch || "main",
+          github_username: username,
           sync_provider: "github",
         });
       }
@@ -168,8 +192,119 @@ export function SettingsPage() {
     }
   };
 
+  const handleStartOAuth = async () => {
+    setPollError(null);
+    setDeviceFlow(null);
+    setIsPolling(true);
+    try {
+      const res = await startGitHubOAuth();
+      setDeviceFlow(res);
+      // Open the browser automatically
+      await openBrowser(res.verification_uri);
+
+      // Start polling for token
+      pollForToken(res.device_code, res.interval);
+    } catch (err) {
+      setIsPolling(false);
+      setPollError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const pollForToken = async (deviceCode: string, interval: number) => {
+    try {
+      const result = await pollGitHubOAuth(deviceCode, interval);
+      if (result.success && result.access_token) {
+        // Keep the freshly issued token in memory until repository selection is
+        // complete. This avoids relying on an immediate OS keychain read-back.
+        setOauthAccessToken(result.access_token);
+        // Fetch username
+        const username = await getGitHubUsername(result.access_token);
+        
+        // Save token and username securely
+        await updateSettings({
+          github_token: result.access_token,
+          github_username: username,
+        });
+
+        // Fetch repositories list
+        setLoadingRepos(true);
+        try {
+          const reposList = await listGitHubRepos(result.access_token);
+          setRepos(reposList);
+          setShowRepoSelector(true);
+        } catch (e) {
+          console.error("Failed to fetch repositories:", e);
+          setPollError("Connected successfully, but failed to load repositories automatically. Try manually configuring or reconnecting.");
+        } finally {
+          setLoadingRepos(false);
+        }
+      } else {
+        setPollError(result.error || "Authentication failed.");
+      }
+    } catch (err) {
+      setPollError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsPolling(false);
+      setDeviceFlow(null);
+    }
+  };
+
+  const handleCancelOAuth = () => {
+    setIsPolling(false);
+    setDeviceFlow(null);
+    setPollError(null);
+  };
+
+  const handleLoadReposForChange = async () => {
+    setLoadingRepos(true);
+    setShowRepoSelector((prev) => !prev);
+    setTestResult(null);
+    try {
+      const reposList = await listGitHubRepos();
+      setRepos(reposList);
+    } catch (err) {
+      console.error("Failed to load repositories:", err);
+      setTestResult({
+        success: false,
+        message: `Failed to load repositories: ${err instanceof Error ? err.message : String(err)}`
+      });
+    } finally {
+      setLoadingRepos(false);
+    }
+  };
+
+  const handleSelectRepository = async (repo: GitHubRepo) => {
+    setIsConnectingState(true);
+    setTestResult(null);
+    try {
+      const res = await testGithubConnection(repo.html_url, oauthAccessToken || "SECURE_TOKEN_SET");
+      setTestResult(res);
+      if (res.success) {
+        await updateSettings({
+          github_repo_url: repo.html_url,
+          github_repo_owner: repo.owner,
+          github_repo_name: repo.name,
+          github_branch: res.default_branch || "main",
+          sync_provider: "github",
+        });
+        setOauthAccessToken(null);
+        setShowRepoSelector(false);
+      }
+    } catch (err) {
+      setTestResult({
+        success: false,
+        message: `Failed to connect repository: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setIsConnectingState(false);
+    }
+  };
+
   const handleDisconnect = async () => {
     setTestResult(null);
+    setRepos([]);
+    setOauthAccessToken(null);
+    setShowRepoSelector(false);
     await updateSettings({
       github_repo_url: null,
       github_token: null,
@@ -329,6 +464,70 @@ export function SettingsPage() {
         alert(errMsg);
       }
     }
+  };
+
+  const renderRepoSelector = () => {
+    const filteredRepos = repos.filter((r) =>
+      r.name.toLowerCase().includes(repoSearch.toLowerCase()) ||
+      r.owner.toLowerCase().includes(repoSearch.toLowerCase())
+    );
+
+    return (
+      <div className="space-y-3 pt-3 border-t border-border/50">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold text-foreground/80 uppercase tracking-wider">Select Repository</Label>
+          {loadingRepos && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        </div>
+        <div className="space-y-2">
+          <Input
+            placeholder="Search repositories..."
+            className="h-8 text-xs"
+            value={repoSearch}
+            onChange={(e) => setRepoSearch(e.target.value)}
+          />
+          <div className="rounded-lg border border-border bg-muted/10 max-h-[200px] overflow-y-auto divide-y divide-border/50 scrollbar-thin">
+            {filteredRepos.length > 0 ? (
+              filteredRepos.map((repo) => (
+                <button
+                  key={repo.id}
+                  type="button"
+                  className={cn(
+                    "w-full px-3 py-2 text-left text-xs transition-colors hover:bg-muted/40 flex items-center justify-between",
+                    (settings.github_repo_owner === repo.owner && settings.github_repo_name === repo.name) && "bg-indigo-500/5 font-medium"
+                  )}
+                  onClick={() => handleSelectRepository(repo)}
+                  disabled={isConnectingState}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-foreground truncate font-medium">{repo.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">owner: {repo.owner}</p>
+                  </div>
+                  {(settings.github_repo_owner === repo.owner && settings.github_repo_name === repo.name) && (
+                    <CheckCircle2 className="h-4 w-4 text-indigo-400 shrink-0 ml-2" />
+                  )}
+                </button>
+              ))
+            ) : (
+              <div className="p-4 text-center text-xs text-muted-foreground">
+                {loadingRepos ? "Fetching repositories..." : "No repositories found."}
+              </div>
+            )}
+          </div>
+          {testResult && (
+            <div className={`p-3 rounded-lg border text-xs leading-normal flex items-start gap-2 ${
+              testResult.success 
+                ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-400" 
+                : "bg-red-500/5 border-red-500/20 text-red-400"
+            }`}>
+              <div className="space-y-1 flex-1">
+                <p className="font-semibold">{testResult.success ? "Success" : "Connection Check Failed"}</p>
+                <p className="opacity-90">{testResult.message}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -794,29 +993,46 @@ export function SettingsPage() {
                     <div className="flex items-center gap-2">
                       <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span className="text-xs font-medium text-foreground">
-                        Connected to GitHub Repository
+                        Connected as <span className="text-indigo-400 font-semibold">{settings.github_username || "unknown"}</span>
                       </span>
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-7 text-[10px] uppercase font-bold"
-                      onClick={handleDisconnect}
-                    >
-                      Disconnect
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={handleLoadReposForChange}
+                        disabled={loadingRepos}
+                      >
+                        {loadingRepos ? "Loading..." : "Change Repository"}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="h-7 text-[10px] uppercase font-bold"
+                        onClick={handleDisconnect}
+                      >
+                        Disconnect
+                      </Button>
+                    </div>
                   </div>
                   <div className="space-y-1.5 text-xs text-muted-foreground">
                     <p>
-                      <strong>Repository URL:</strong>{" "}
-                      <span className="font-mono text-[11px] text-foreground">{settings.github_repo_url}</span>
+                      <strong>Repository:</strong>{" "}
+                      <span className="font-mono text-[11px] text-foreground">
+                        {settings.github_repo_owner}/{settings.github_repo_name}
+                      </span>
                     </p>
                     <p>
                       <strong>Branch:</strong>{" "}
-                      <span className="font-mono text-[11px] text-foreground">{settings.github_branch}</span>
+                      <span className="font-mono text-[11px] text-foreground">
+                        {settings.github_branch}
+                      </span>
                     </p>
                   </div>
                 </div>
+
+                {showRepoSelector && renderRepoSelector()}
 
                 {/* GitHub Integration Docs Dialog */}
                 <Dialog open={showGithubDocs} onOpenChange={setShowGithubDocs}>
@@ -887,84 +1103,183 @@ export function SettingsPage() {
               <div className="space-y-4 pt-3 border-t border-border">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">GitHub Connection</Label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1.5"
-                    onClick={() => setShowGithubDocs(true)}
-                  >
-                    See Documentation
-                  </Button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="gh-url" className="text-xs font-medium text-foreground/80">Repository URL</Label>
-                    <Input
-                      id="gh-url"
-                      placeholder="https://github.com/owner/repo"
-                      className="h-8 text-xs font-mono"
-                      value={githubRepoUrl}
-                      onChange={(e) => setGithubRepoUrl(e.target.value)}
-                    />
-                    <p className="text-[10px] text-muted-foreground/75 leading-normal">
-                      The full URL of your GitHub repository (e.g. <code>https://github.com/ashikhosen/devsoffice-snippets</code>).
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="gh-token" className="text-xs font-medium text-foreground/80">
-                      Fine-grained Personal Access Token
-                    </Label>
-                    <Input
-                      id="gh-token"
-                      type="password"
-                      placeholder="github_pat_..."
-                      className="h-8 text-xs font-mono"
-                      value={githubToken}
-                      onChange={(e) => setGithubToken(e.target.value)}
-                    />
-                    <p className="text-[10px] text-muted-foreground/75 leading-normal">
-                      Secure authentication token. Must have <strong>Contents (Read/Write)</strong> and <strong>Metadata (Read)</strong> permissions.
-                    </p>
-                  </div>
-
-                  {/* Actions & Feedback */}
-                  <div className="flex gap-2.5 pt-2">
+                  {authMethod === "pat" && (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs font-medium px-4"
-                      onClick={handleTestConnection}
-                      disabled={isTesting || isConnectingState}
+                      className="h-7 text-xs gap-1.5"
+                      onClick={() => setShowGithubDocs(true)}
                     >
-                      {isTesting ? "Testing..." : "Test Connection"}
+                      See Documentation
                     </Button>
-                    <Button
-                      size="sm"
-                      className="h-8 text-xs font-semibold px-5"
-                      onClick={handleConnect}
-                      disabled={isTesting || isConnectingState || !githubRepoUrl || !githubToken}
-                    >
-                      {isConnectingState ? "Connecting..." : "Connect"}
-                    </Button>
-                  </div>
-
-                  {testResult && (
-                    <div className={`p-3 rounded-lg border text-xs leading-normal flex items-start gap-2 ${
-                      testResult.success 
-                        ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-400" 
-                        : "bg-red-500/5 border-red-500/20 text-red-400"
-                    }`}>
-                      <div className="space-y-1 flex-1">
-                        <p className="font-semibold">{testResult.success ? "Success" : "Connection Check Failed"}</p>
-                        <p className="opacity-90">{testResult.message}</p>
-                      </div>
-                    </div>
                   )}
                 </div>
 
-                {/* Docs Dialog (also mapped here just in case) */}
+                {authMethod === "oauth" ? (
+                  <div className="space-y-4">
+                    <div className="p-5 rounded-lg border border-border bg-muted/10 space-y-4 text-center">
+                      <p className="text-xs text-muted-foreground leading-normal max-w-sm mx-auto">
+                        Connect your GitHub account to sync snippets across devices.
+                      </p>
+
+                      {deviceFlow ? (
+                        <div className="space-y-3 pt-2">
+                          <div className="bg-indigo-500/5 p-4 rounded-lg border border-indigo-500/10 space-y-2 max-w-xs mx-auto">
+                            {deviceFlow.user_code && (
+                              <>
+                                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Device Activation Code</span>
+                                <div className="text-2xl font-mono font-bold tracking-widest text-indigo-400 select-all my-1">{deviceFlow.user_code}</div>
+                              </>
+                            )}
+                            <p className="text-[10px] text-muted-foreground/80 leading-normal">
+                              We opened GitHub in your browser. Authorize Espander there, then return to the app.
+                            </p>
+                          </div>
+
+                          <div className="flex justify-center gap-2 pt-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs"
+                              onClick={() => openBrowser(deviceFlow.verification_uri)}
+                            >
+                              Reopen Activation Page
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs text-red-400 hover:text-red-300"
+                              onClick={handleCancelOAuth}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="pt-2">
+                          <Button
+                            size="sm"
+                            className="h-8 text-xs font-semibold px-6"
+                            onClick={handleStartOAuth}
+                            disabled={isPolling}
+                          >
+                            {isPolling ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 animate-spin mr-1.5" />
+                                Connecting...
+                              </>
+                            ) : (
+                              "Connect to GitHub"
+                            )}
+                          </Button>
+                        </div>
+                      )}
+
+                      {pollError && (
+                        <p className="text-xs text-red-400 mt-2 font-medium">{pollError}</p>
+                      )}
+                    </div>
+
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMethod("pat");
+                          setTestResult(null);
+                          setShowRepoSelector(false);
+                        }}
+                        className="text-xs text-indigo-400 hover:underline hover:text-indigo-300 font-medium transition-colors"
+                      >
+                        Use Personal Access Token Instead
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="gh-url" className="text-xs font-medium text-foreground/80">Repository URL</Label>
+                      <Input
+                        id="gh-url"
+                        placeholder="https://github.com/owner/repo"
+                        className="h-8 text-xs font-mono"
+                        value={githubRepoUrl}
+                        onChange={(e) => setGithubRepoUrl(e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground/75 leading-normal">
+                        The full URL of your GitHub repository (e.g. <code>https://github.com/ashikhosen/devsoffice-snippets</code>).
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="gh-token" className="text-xs font-medium text-foreground/80">
+                        Fine-grained Personal Access Token
+                      </Label>
+                      <Input
+                        id="gh-token"
+                        type="password"
+                        placeholder="github_pat_..."
+                        className="h-8 text-xs font-mono"
+                        value={githubToken}
+                        onChange={(e) => setGithubToken(e.target.value)}
+                      />
+                      <p className="text-[10px] text-muted-foreground/75 leading-normal">
+                        Secure authentication token. Must have <strong>Contents (Read/Write)</strong> and <strong>Metadata (Read)</strong> permissions.
+                      </p>
+                    </div>
+
+                    {/* Actions & Feedback */}
+                    <div className="flex gap-2.5 pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs font-medium px-4"
+                        onClick={handleTestConnection}
+                        disabled={isTesting || isConnectingState}
+                      >
+                        {isTesting ? "Testing..." : "Test Connection"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs font-semibold px-5"
+                        onClick={handleConnect}
+                        disabled={isTesting || isConnectingState || !githubRepoUrl || !githubToken}
+                      >
+                        {isConnectingState ? "Connecting..." : "Connect"}
+                      </Button>
+                    </div>
+
+                    {testResult && (
+                      <div className={`p-3 rounded-lg border text-xs leading-normal flex items-start gap-2 ${
+                        testResult.success 
+                          ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-400" 
+                          : "bg-red-500/5 border-red-500/20 text-red-400"
+                      }`}>
+                        <div className="space-y-1 flex-1">
+                          <p className="font-semibold">{testResult.success ? "Success" : "Connection Check Failed"}</p>
+                          <p className="opacity-90">{testResult.message}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-center pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMethod("oauth");
+                          setTestResult(null);
+                          setShowRepoSelector(false);
+                        }}
+                        className="text-xs text-indigo-400 hover:underline hover:text-indigo-300 font-medium transition-colors"
+                      >
+                        Connect via GitHub App Instead
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {showRepoSelector && renderRepoSelector()}
+
+                {/* Docs Dialog */}
                 <Dialog open={showGithubDocs} onOpenChange={setShowGithubDocs}>
                   <DialogContent className="sm:max-w-[480px]">
                     <DialogHeader>

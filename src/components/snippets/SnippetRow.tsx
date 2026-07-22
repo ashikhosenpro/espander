@@ -31,6 +31,7 @@ interface SnippetRowProps {
   selected: boolean;
   onSelect: () => void;
   onEdit: () => void;
+  onViewNotes?: (notes: string) => void;
   grid?: boolean;
 }
 
@@ -40,7 +41,7 @@ const sourceLabels: Record<string, { label: string; icon: typeof HardDrive }> = 
   github: { label: "GitHub", icon: Globe },
 };
 
-export function SnippetRow({ snippet, selected, onSelect, onEdit, grid }: SnippetRowProps) {
+export function SnippetRow({ snippet, selected, onSelect, onEdit, onViewNotes, grid }: SnippetRowProps) {
   const { toggleFavorite, deleteSnippet } = useSnippetStore();
   const { categories } = useCategoryStore();
   const [showProtectedValue, setShowProtectedValue] = useState(false);
@@ -108,6 +109,20 @@ export function SnippetRow({ snippet, selected, onSelect, onEdit, grid }: Snippe
                 {category.name}
               </Badge>
             )}
+            {snippet.notes && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="h-5 w-5 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 p-0 flex items-center justify-center shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewNotes?.(snippet.notes!);
+                }}
+                title="View Notes"
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
               <SourceIcon className="h-3 w-3" />
               {sourceInfo.label}
@@ -140,7 +155,7 @@ export function SnippetRow({ snippet, selected, onSelect, onEdit, grid }: Snippe
   return (
     <div
       className={cn(
-        "grid grid-cols-[32px_0.8fr_1.2fr_110px_90px_110px_72px] gap-3 px-4 py-3 items-center hover:bg-muted/30 transition-colors",
+        "grid grid-cols-[32px_0.8fr_1.2fr_60px_110px_90px_110px_72px] gap-3 px-4 py-3 items-center hover:bg-muted/30 transition-colors",
         selected && "bg-indigo-500/5"
       )}
     >
@@ -177,6 +192,24 @@ export function SnippetRow({ snippet, selected, onSelect, onEdit, grid }: Snippe
           >
             {showProtectedValue ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
           </button>
+        )}
+      </div>
+      <div className="flex justify-center">
+        {snippet.notes ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="h-7 w-7 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 p-0 flex items-center justify-center"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewNotes?.(snippet.notes!);
+            }}
+            title="View Notes"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+        ) : (
+          <span className="text-muted-foreground/20 text-xs">-</span>
         )}
       </div>
       <div>

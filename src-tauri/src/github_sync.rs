@@ -41,6 +41,8 @@ struct YamlMatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    notes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     tags: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     is_favorite: Option<bool>,
@@ -271,6 +273,7 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
                             replace: m.replace,
                             category_id: category_id.clone(),
                             description: m.description.unwrap_or_default(),
+                            notes: m.notes,
                             tags: m.tags.unwrap_or_default(),
                             is_favorite: m.is_favorite.unwrap_or(false),
                             is_paused: m.is_paused.unwrap_or(false),
@@ -428,6 +431,7 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
                 } else {
                     Some(s.description.clone())
                 },
+                notes: s.notes.clone(),
                 tags: if s.tags.is_empty() {
                     None
                 } else {

@@ -32,6 +32,7 @@ export function SnippetEditorDialog() {
   const [trigger, setTrigger] = useState("");
   const [replace, setReplace] = useState("");
   const [categoryId, setCategoryId] = useState("personal");
+  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [isProtected, setIsProtected] = useState(false);
   const [showProtectedValue, setShowProtectedValue] = useState(false);
@@ -50,6 +51,7 @@ export function SnippetEditorDialog() {
       setReplace(editingSnippet.replace);
       setCategoryId(editingSnippet.category_id);
       setIsProtected(editingSnippet.is_protected);
+      setNotes(editingSnippet.notes || "");
     } else {
       setTrigger("");
       setReplace("");
@@ -57,6 +59,7 @@ export function SnippetEditorDialog() {
         ? filterCategory
         : categories[0]?.id || "personal");
       setIsProtected(false);
+      setNotes("");
     }
     setShowProtectedValue(false);
   }, [editorMode, editingSnippet, editorOpen]);
@@ -73,6 +76,7 @@ export function SnippetEditorDialog() {
           replace,
           category_id: categoryId,
           is_protected: isProtected,
+          notes: notes.trim() || undefined,
         };
         await createSnippet(input);
       } else if (editorSnippetId) {
@@ -81,6 +85,7 @@ export function SnippetEditorDialog() {
           replace,
           category_id: categoryId,
           is_protected: isProtected,
+          notes: notes.trim(),
         };
         await updateSnippet(editorSnippetId, input);
       }
@@ -96,11 +101,11 @@ export function SnippetEditorDialog() {
   return (
     <Dialog open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
       <DialogContent
-        className="sm:max-w-[540px]"
+        className="sm:max-w-[540px] max-h-[90vh] flex flex-col p-6 gap-4"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
       >
-        <DialogHeader>
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             {editorMode === "create" ? "New Snippet" : "Edit Snippet"}
           </DialogTitle>
@@ -111,7 +116,7 @@ export function SnippetEditorDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 overflow-y-auto pr-1">
           {errorMsg && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400 font-medium">
               {errorMsg}
@@ -192,6 +197,17 @@ export function SnippetEditorDialog() {
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes (Optional)</Label>
+            <textarea
+              id="notes"
+              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+              placeholder="Add optional notes or documentation..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+
           {replace && (!isProtected || showProtectedValue) && (
             <div className="space-y-2">
               <Label>Preview</Label>
@@ -202,7 +218,7 @@ export function SnippetEditorDialog() {
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 pt-2 border-t border-border/20">
           <Button variant="outline" onClick={closeEditor}>
             Cancel
           </Button>

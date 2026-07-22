@@ -8,6 +8,8 @@ pub struct Snippet {
     pub replace: String,
     pub category_id: String,
     pub description: String,
+    #[serde(default)]
+    pub notes: Option<String>,
     pub tags: Vec<String>,
     pub is_favorite: bool,
     pub is_paused: bool,
@@ -30,6 +32,8 @@ pub struct CreateSnippetInput {
     pub replace: String,
     pub category_id: Option<String>,
     pub description: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
     pub tags: Option<Vec<String>>,
     pub source: Option<String>,
     #[serde(default)]
@@ -42,6 +46,8 @@ pub struct UpdateSnippetInput {
     pub replace: Option<String>,
     pub category_id: Option<String>,
     pub description: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
     pub tags: Option<Vec<String>>,
     pub is_favorite: Option<bool>,
     pub is_paused: Option<bool>,

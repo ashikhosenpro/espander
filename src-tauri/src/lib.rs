@@ -134,6 +134,8 @@ pub fn run() {
             commands::sync::get_sync_status,
             commands::sync::start_github_oauth,
             commands::sync::poll_github_oauth,
+            commands::sync::get_github_username,
+            commands::sync::list_github_repos,
             commands::sync::test_github_connection,
             commands::gsheet::validate_gsheet_url,
             commands::gsheet::import_from_gsheet,
