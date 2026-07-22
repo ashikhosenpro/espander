@@ -10,6 +10,18 @@ function App() {
   }, [loadSettings]);
 
   useEffect(() => {
+    const handleRefreshShortcut = (event: KeyboardEvent) => {
+      const refreshShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r";
+      if (!refreshShortcut && event.key !== "F5") return;
+      event.preventDefault();
+      window.location.reload();
+    };
+
+    window.addEventListener("keydown", handleRefreshShortcut);
+    return () => window.removeEventListener("keydown", handleRefreshShortcut);
+  }, []);
+
+  useEffect(() => {
     const root = document.documentElement;
     if (settings.theme === "dark") {
       root.classList.add("dark");

@@ -5,7 +5,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -101,35 +100,64 @@ export function SnippetEditorDialog() {
   return (
     <Dialog open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
       <DialogContent
-        className="sm:max-w-[540px] max-h-[90vh] flex flex-col p-6 gap-4"
+        className="sm:max-w-[680px] max-h-[92vh] flex flex-col gap-0 overflow-hidden border-border/90 bg-card p-0 shadow-2xl"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
       >
-        <DialogHeader className="shrink-0">
-          <DialogTitle>
-            {editorMode === "create" ? "New Snippet" : "Edit Snippet"}
-          </DialogTitle>
-          <DialogDescription>
-            {editorMode === "create"
-              ? "Create a new text expansion snippet"
-              : "Edit your text expansion snippet"}
-          </DialogDescription>
+        <DialogHeader className="shrink-0 border-b border-border/70 px-6 py-5 pr-12">
+          <div className="flex items-center justify-between gap-4">
+            <DialogTitle className="text-xl">
+              {editorMode === "create" ? "New Snippet" : "Edit Snippet"}
+            </DialogTitle>
+            <label htmlFor="mask-replacement" className="flex cursor-pointer items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+              <EyeOff className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Mask replacement</span>
+              <Switch
+                id="mask-replacement"
+                checked={isProtected}
+                onCheckedChange={(checked) => {
+                  setIsProtected(checked);
+                  setShowProtectedValue(false);
+                }}
+              />
+            </label>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4 flex-1 overflow-y-auto pr-1">
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5 scrollbar-thin">
           {errorMsg && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400 font-medium">
               {errorMsg}
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="trigger">Trigger</Label>
-            <Input
-              id="trigger"
-              placeholder=":mytrigger"
-              value={trigger}
-              onChange={(e) => setTrigger(e.target.value)}
-            />
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(190px,0.65fr)]">
+            <div className="space-y-2">
+              <Label htmlFor="trigger">Trigger</Label>
+              <Input
+                id="trigger"
+                autoFocus
+                placeholder=":mytrigger"
+                value={trigger}
+                onChange={(e) => setTrigger(e.target.value)}
+                className="h-11 border-border/90 bg-background/60 px-3.5 font-mono text-base shadow-inner focus-visible:border-indigo-400/80 focus-visible:ring-indigo-500/30"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Select value={categoryId} onValueChange={setCategoryId}>
+                <SelectTrigger id="category" className="h-11 border-border/90 bg-background/60 px-3.5 shadow-inner focus:ring-indigo-500/30">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -137,7 +165,7 @@ export function SnippetEditorDialog() {
             <div className="relative">
               <textarea
                 id="replace"
-                className="flex min-h-[120px] w-full rounded-lg border border-input bg-transparent px-3 py-2 pr-11 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                className="flex min-h-[230px] w-full resize-y rounded-xl border border-border/90 bg-background/60 px-4 py-3.5 pr-12 text-[15px] font-mono leading-relaxed shadow-inner placeholder:text-muted-foreground/70 focus-visible:border-indigo-400/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
                 placeholder="What should the trigger expand to?"
                 value={replace}
                 onChange={(e) => setReplace(e.target.value)}
@@ -161,68 +189,24 @@ export function SnippetEditorDialog() {
             </p>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-3">
-            <div className="flex items-start gap-3 pr-4">
-              <EyeOff className="mt-0.5 h-4 w-4 text-indigo-400" />
-              <div>
-                <Label htmlFor="mask-replacement">Mask replacement</Label>
-                <p className="text-xs text-muted-foreground">
-                  Hide this value in lists and previews. Useful during screen sharing or recording.
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="mask-replacement"
-              checked={isProtected}
-              onCheckedChange={(checked) => {
-                setIsProtected(checked);
-                setShowProtectedValue(false);
-              }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="category">Category</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger id="category">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="notes">Notes (Optional)</Label>
             <textarea
               id="notes"
-              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+              className="flex min-h-[88px] w-full resize-y rounded-xl border border-border/90 bg-background/60 px-4 py-3 text-sm leading-relaxed shadow-inner placeholder:text-muted-foreground/70 focus-visible:border-indigo-400/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
               placeholder="Add optional notes or documentation..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
           </div>
 
-          {replace && (!isProtected || showProtectedValue) && (
-            <div className="space-y-2">
-              <Label>Preview</Label>
-              <div className="rounded-lg border border-border bg-muted/30 p-3">
-                <p className="text-sm whitespace-pre-wrap">{replace}</p>
-              </div>
-            </div>
-          )}
         </div>
 
-        <DialogFooter className="shrink-0 pt-2 border-t border-border/20">
-          <Button variant="outline" onClick={closeEditor}>
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-muted/10 px-6 py-4">
+          <Button variant="outline" className="h-10 px-5" onClick={closeEditor}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!trigger.trim() || !replace.trim() || saving}>
+          <Button className="h-10 px-6" onClick={handleSave} disabled={!trigger.trim() || !replace.trim() || saving}>
             {saving ? (
               <>
                 <div className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin mr-2" />

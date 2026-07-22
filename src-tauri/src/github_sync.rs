@@ -96,7 +96,7 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
     if token == "SECURE_TOKEN_SET" || token.starts_with("github_pat_••••") {
         token = crate::db::settings::get_secure_token().ok_or_else(|| {
             EspanderError::SyncFailed(
-                "GitHub Personal Access Token not found in secure storage.".to_string(),
+                "GitHub authorization was not found in secure storage. Reconnect your GitHub account, then try syncing again.".to_string(),
             )
         })?;
     }

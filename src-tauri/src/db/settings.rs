@@ -56,14 +56,15 @@ fn delete_fallback_token() {
 }
 
 pub fn set_secure_token(token: &str) -> Result<(), String> {
-    if let Ok(entry) = Entry::new(GITHUB_TOKEN_SERVICE, GITHUB_TOKEN_ACCOUNT) {
-        if entry.set_password(token).is_ok() {
-            delete_fallback_token();
-            return Ok(());
-        }
-    }
+    // Keep an app-private fallback even when the OS credential write reports
+    // success. Unsigned/ad-hoc desktop builds can successfully write a keychain
+    // entry and then be denied when a later process tries to read it.
+    set_fallback_token(token)?;
 
-    set_fallback_token(token)
+    if let Ok(entry) = Entry::new(GITHUB_TOKEN_SERVICE, GITHUB_TOKEN_ACCOUNT) {
+        let _ = entry.set_password(token);
+    }
+    Ok(())
 }
 
 pub fn get_secure_token() -> Option<String> {

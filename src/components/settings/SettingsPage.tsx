@@ -68,6 +68,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUpdateStore } from "@/stores/useUpdateStore";
+import { IsolatedHtmlContent } from "@/components/settings/IsolatedHtmlContent";
 
 export function SettingsPage() {
   const { settings, updateSettings } = useSettingsStore();
@@ -531,7 +532,7 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="settings-page max-w-3xl mx-auto p-6 space-y-6">
+    <div className="settings-page w-full max-w-none p-6 space-y-6">
       <div className="settings-header">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground/80 mt-1">
@@ -1420,12 +1421,9 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="docs" className="space-y-4">
-          <div className="about-page settings-panel rounded-xl border border-border bg-card p-5">
+          <div className="about-page w-full min-w-0">
             {docsHtml ? (
-              <div
-                className="page-content text-sm [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mb-1.5 [&_p]:mb-2 [&_p]:leading-relaxed [&_a]:text-indigo-400 [&_a:hover]:text-indigo-300 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-2 [&_li]:mb-0.5 [&_hr]:border-border [&_hr]:my-3 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:text-xs [&_img]:rounded-lg [&_img]:max-w-full [&_blockquote]:border-l-2 [&_blockquote]:border-indigo-500 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-muted-foreground"
-                dangerouslySetInnerHTML={{ __html: docsHtml }}
-              />
+              <IsolatedHtmlContent html={docsHtml} onLinkClick={openBrowser} />
             ) : (
               <p className="text-sm text-muted-foreground">Loading...</p>
             )}
@@ -1433,12 +1431,9 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="about" className="space-y-4">
-          <div className="about-page settings-panel rounded-xl border border-border bg-card p-5">
+          <div className="about-page w-full min-w-0">
             {aboutHtml ? (
-              <div
-                className="page-content text-sm [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mb-1.5 [&_p]:mb-2 [&_p]:leading-relaxed [&_a]:text-indigo-400 [&_a:hover]:text-indigo-300 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-2 [&_li]:mb-0.5 [&_hr]:border-border [&_hr]:my-3 [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:text-xs [&_img]:rounded-lg [&_img]:max-w-full [&_blockquote]:border-l-2 [&_blockquote]:border-indigo-500 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-muted-foreground"
-                dangerouslySetInnerHTML={{ __html: aboutHtml }}
-              />
+              <IsolatedHtmlContent html={aboutHtml} onLinkClick={openBrowser} />
             ) : (
               <p className="text-sm text-muted-foreground">Loading...</p>
             )}
@@ -1446,7 +1441,7 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="updates" className="space-y-4">
-          <div className="settings-panel rounded-xl border border-border bg-card p-5 space-y-4">
+          <div className="w-full min-w-0 space-y-4">
             <h3 className="text-sm font-medium">Application Updates</h3>
             <p className="text-xs text-muted-foreground/70">
               Keep Espander up to date with the latest features, security patches, and performance fixes.
