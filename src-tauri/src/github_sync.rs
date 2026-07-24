@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use uuid::Uuid;
 
 use crate::db::database::Database;
 use crate::db::schema::{Category, CategoryFile, Snippet, SnippetFile, SyncResult, SyncStatus};
@@ -36,6 +37,8 @@ pub fn parse_github_url(url: &str) -> Option<(String, String)> {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct YamlMatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    id: Option<String>,
     trigger: String,
     replace: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -85,6 +88,41 @@ struct GithubDeletePayload {
     sha: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     branch: Option<String>,
+}
+
+fn legacy_snippet_content_matches(local: &Snippet, remote: &Snippet) -> bool {
+    local.replace == remote.replace
+        && local.category_id == remote.category_id
+        && local.description == remote.description
+        && local.notes == remote.notes
+        && local.tags == remote.tags
+        && local.is_favorite == remote.is_favorite
+        && local.is_paused == remote.is_paused
+        && local.is_protected == remote.is_protected
+}
+
+fn find_legacy_match_id(
+    local: &Snippet,
+    remote_by_id: &HashMap<String, Snippet>,
+    legacy_remote_ids: &HashSet<String>,
+) -> Option<String> {
+    if let Some((id, _)) = remote_by_id.iter().find(|(id, remote)| {
+        legacy_remote_ids.contains(*id) && remote.trigger.eq_ignore_ascii_case(&local.trigger)
+    }) {
+        return Some(id.clone());
+    }
+
+    let mut content_matches = remote_by_id.iter().filter(|(id, remote)| {
+        legacy_remote_ids.contains(*id) && legacy_snippet_content_matches(local, remote)
+    });
+    let (id, _) = content_matches.next()?;
+    if content_matches.next().is_some() {
+        // Identical legacy snippets are ambiguous; do not risk assigning the
+        // wrong stable ID. They will be imported and migrated independently.
+        None
+    } else {
+        Some(id.clone())
+    }
 }
 
 pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError> {
@@ -193,6 +231,7 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
     let mut remote_file_shas: HashMap<String, String> = HashMap::new();
     let mut remote_file_names: HashMap<String, String> = HashMap::new();
     let mut remote_file_contents: HashMap<String, String> = HashMap::new();
+    let mut legacy_remote_ids = HashSet::new();
 
     // 2. Download and parse remote YAML files
     for item in remote_yaml_files {
@@ -261,14 +300,22 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
                     });
 
                     for m in yaml_data.matches {
+                        let remote_id = match m.id.filter(|id| !id.trim().is_empty()) {
+                            Some(id) => id,
+                            None => {
+                                let id = Uuid::new_v4().to_string();
+                                legacy_remote_ids.insert(id.clone());
+                                id
+                            }
+                        };
                         let updated_at = m
                             .updated_at
                             .and_then(|t| DateTime::parse_from_rfc3339(&t).ok())
                             .map(|t| t.with_timezone(&Utc))
-                            .unwrap_or_else(Utc::now);
+                            .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
 
                         remote_snippets.push(Snippet {
-                            id: format!("{}-{}", category_id, m.trigger.trim_start_matches(':')),
+                            id: remote_id,
                             trigger: m.trigger,
                             replace: m.replace,
                             category_id: category_id.clone(),
@@ -319,74 +366,81 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
         }
     }
 
-    let mut remote_by_trigger: HashMap<String, Snippet> = remote_snippets
+    let mut remote_by_id: HashMap<String, Snippet> = remote_snippets
         .into_iter()
-        .map(|s| (s.trigger.to_lowercase(), s))
+        .map(|s| (s.id.clone(), s))
         .collect();
-
-    let local_by_trigger: HashMap<String, Snippet> = local_snippets_file
-        .snippets
-        .into_iter()
-        .map(|s| (s.trigger.to_lowercase(), s))
-        .collect();
-
     let mut merged_snippets: HashMap<String, Snippet> = HashMap::new();
 
-    // Iterate through local snippets to reconcile with remote
-    for (trigger_key, mut l_snip) in local_by_trigger {
-        if let Some(r_snip) = remote_by_trigger.remove(&trigger_key) {
-            // Case 1: Snippet exists on both remote and local
-            if l_snip.sync_status == SyncStatus::Modified {
-                if r_snip.updated_at > l_snip.updated_at {
-                    // Remote is newer, pull it (keep local ID)
-                    let old_id = l_snip.id.clone();
-                    l_snip = r_snip;
-                    l_snip.id = old_id;
-                    l_snip.sync_status = SyncStatus::Synced;
-                    snippets_pulled += 1;
+    // Reconcile by the stable snippet ID. For legacy GitHub YAML that did not
+    // contain IDs, fall back to matching unchanged triggers or the snippet
+    // content (excluding the trigger) once, then persist the local ID remotely.
+    for mut l_snip in local_snippets_file.snippets {
+        let direct_match_id = remote_by_id
+            .contains_key(&l_snip.id)
+            .then(|| l_snip.id.clone());
+        let fallback_match_id = direct_match_id
+            .or_else(|| find_legacy_match_id(&l_snip, &remote_by_id, &legacy_remote_ids));
+
+        if let Some(remote_id) = fallback_match_id {
+            if let Some(mut r_snip) = remote_by_id.remove(&remote_id) {
+                // A legacy remote entry received a temporary ID while parsing.
+                // Adopt the durable local ID so the next upload migrates it.
+                r_snip.id = l_snip.id.clone();
+                // Case 1: Snippet exists on both remote and local
+                if l_snip.sync_status == SyncStatus::Modified {
+                    if r_snip.updated_at > l_snip.updated_at {
+                        // Remote is newer, pull it (keep local ID)
+                        let old_id = l_snip.id.clone();
+                        l_snip = r_snip;
+                        l_snip.id = old_id;
+                        l_snip.sync_status = SyncStatus::Synced;
+                        snippets_pulled += 1;
+                    } else {
+                        // Local is newer, keep local (will push it)
+                    }
+                } else if l_snip.sync_status == SyncStatus::Local {
+                    if r_snip.updated_at > l_snip.updated_at {
+                        let old_id = l_snip.id.clone();
+                        l_snip = r_snip;
+                        l_snip.id = old_id;
+                        l_snip.sync_status = SyncStatus::Synced;
+                        snippets_pulled += 1;
+                    }
                 } else {
-                    // Local is newer, keep local (will push it)
+                    // Synced or Conflict
+                    // Pull remote if there are any differences
+                    if l_snip.trigger != r_snip.trigger
+                        || l_snip.replace != r_snip.replace
+                        || l_snip.description != r_snip.description
+                        || l_snip.category_id != r_snip.category_id
+                        || l_snip.tags != r_snip.tags
+                        || l_snip.is_favorite != r_snip.is_favorite
+                        || l_snip.is_paused != r_snip.is_paused
+                        || l_snip.is_protected != r_snip.is_protected
+                    {
+                        let old_id = l_snip.id.clone();
+                        l_snip = r_snip;
+                        l_snip.id = old_id;
+                        l_snip.sync_status = SyncStatus::Synced;
+                        snippets_pulled += 1;
+                    }
                 }
-            } else if l_snip.sync_status == SyncStatus::Local {
-                if r_snip.updated_at > l_snip.updated_at {
-                    let old_id = l_snip.id.clone();
-                    l_snip = r_snip;
-                    l_snip.id = old_id;
-                    l_snip.sync_status = SyncStatus::Synced;
-                    snippets_pulled += 1;
-                }
-            } else {
-                // Synced or Conflict
-                // Pull remote if there are any differences
-                if l_snip.replace != r_snip.replace
-                    || l_snip.description != r_snip.description
-                    || l_snip.category_id != r_snip.category_id
-                    || l_snip.tags != r_snip.tags
-                    || l_snip.is_favorite != r_snip.is_favorite
-                    || l_snip.is_paused != r_snip.is_paused
-                    || l_snip.is_protected != r_snip.is_protected
-                {
-                    let old_id = l_snip.id.clone();
-                    l_snip = r_snip;
-                    l_snip.id = old_id;
-                    l_snip.sync_status = SyncStatus::Synced;
-                    snippets_pulled += 1;
-                }
+                merged_snippets.insert(l_snip.id.clone(), l_snip);
             }
-            merged_snippets.insert(trigger_key, l_snip);
         } else {
             // Case 2: Snippet exists locally but NOT on remote.
             // GitHub sync is additive: keep it locally and include it in the next upload.
-            merged_snippets.insert(trigger_key, l_snip);
+            merged_snippets.insert(l_snip.id.clone(), l_snip);
         }
     }
 
     // Case 3: Snippet exists on remote but NOT locally
-    for (trigger_key, r_snip) in remote_by_trigger {
+    for (_, r_snip) in remote_by_id {
         // GitHub sync is additive: pull remote-only snippets into the local database.
         let mut snip = r_snip;
         snip.sync_status = SyncStatus::Synced;
-        merged_snippets.insert(trigger_key, snip);
+        merged_snippets.insert(snip.id.clone(), snip);
         snippets_pulled += 1;
     }
 
@@ -424,6 +478,7 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
         let yaml_matches: Vec<YamlMatch> = snippets
             .iter()
             .map(|s| YamlMatch {
+                id: Some(s.id.clone()),
                 trigger: s.trigger.clone(),
                 replace: s.replace.clone(),
                 description: if s.description.is_empty() {
@@ -599,4 +654,40 @@ pub async fn run_github_sync(db: &Database) -> Result<SyncResult, EspanderError>
             )
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn yaml_match_round_trip_preserves_stable_id() {
+        let yaml = r#"
+matches:
+  - id: 8ae45f6e-10bc-4a9d-bdf3-dbb8300456c8
+    trigger: ">email"
+    replace: user@example.com
+"#;
+
+        let parsed: YamlFileContent = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(
+            parsed.matches[0].id.as_deref(),
+            Some("8ae45f6e-10bc-4a9d-bdf3-dbb8300456c8")
+        );
+
+        let serialized = serde_yaml::to_string(&parsed).unwrap();
+        assert!(serialized.contains("id: 8ae45f6e-10bc-4a9d-bdf3-dbb8300456c8"));
+    }
+
+    #[test]
+    fn legacy_yaml_without_id_still_parses() {
+        let yaml = r#"
+matches:
+  - trigger: ">email"
+    replace: user@example.com
+"#;
+
+        let parsed: YamlFileContent = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(parsed.matches[0].id, None);
+    }
 }

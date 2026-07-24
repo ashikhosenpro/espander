@@ -293,6 +293,10 @@ export function SettingsPage() {
           github_repo_url: repo.html_url,
           github_repo_owner: repo.owner,
           github_repo_name: repo.name,
+          // Persist the freshly issued token again as part of the repository
+          // selection transaction. Passing only the placeholder can leave a
+          // connected-looking repository without a usable secure credential.
+          github_token: oauthAccessToken || "SECURE_TOKEN_SET",
           github_branch: res.default_branch || "main",
           sync_provider: "github",
         });

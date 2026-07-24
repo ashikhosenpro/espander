@@ -27,11 +27,25 @@ pub fn delete_secure_token() -> Result<(), String> {
     }
 }
 
+fn masked_token_for_settings(stored_token: &str, secure_token_available: bool) -> Option<String> {
+    let uses_secure_storage =
+        stored_token == "SECURE_TOKEN_SET" || stored_token.starts_with("github_pat_••••");
+    if uses_secure_storage && !secure_token_available {
+        None
+    } else {
+        Some("github_pat_••••••••".to_string())
+    }
+}
+
 impl Database {
     pub async fn get_settings(&self) -> Result<Settings, EspanderError> {
         let mut settings: Settings = self.read_json(&self.settings_path).await?;
-        if settings.github_token.is_some() {
-            settings.github_token = Some("github_pat_••••••••".to_string());
+        if let Some(stored_token) = settings.github_token.as_deref() {
+            // Do not report a stale placeholder as an active connection. This
+            // lets the UI offer reconnection instead of repeatedly failing only
+            // when the user presses Sync.
+            settings.github_token =
+                masked_token_for_settings(stored_token, get_secure_token().is_some());
         }
         Ok(settings)
     }
@@ -126,4 +140,30 @@ pub async fn get_app_data_dir() -> Result<std::path::PathBuf, EspanderError> {
         .map_err(|_| EspanderError::Other("Cannot determine home directory".to_string()))?;
 
     Ok(std::path::PathBuf::from(home).join(".espander"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::masked_token_for_settings;
+
+    #[test]
+    fn stale_secure_token_marker_is_not_reported_as_connected() {
+        assert_eq!(masked_token_for_settings("SECURE_TOKEN_SET", false), None);
+    }
+
+    #[test]
+    fn available_secure_token_is_masked() {
+        assert_eq!(
+            masked_token_for_settings("SECURE_TOKEN_SET", true).as_deref(),
+            Some("github_pat_••••••••")
+        );
+    }
+
+    #[test]
+    fn legacy_plaintext_token_remains_usable_and_masked() {
+        assert_eq!(
+            masked_token_for_settings("ghp_legacy-token", false).as_deref(),
+            Some("github_pat_••••••••")
+        );
+    }
 }
