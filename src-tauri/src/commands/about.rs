@@ -115,9 +115,9 @@ async fn fetch_remote_footer() -> Option<FooterSettings> {
 
 fn default_footer_settings() -> FooterSettings {
     FooterSettings {
-        left_text: "Espander v0.1.0 · MIT License".to_string(),
+        left_text: format!("Espander v{} · MIT License", env!("CARGO_PKG_VERSION")),
         link_label: "GitHub".to_string(),
-        link_url: "https://github.com/ashikhosenpro/Expander".to_string(),
+        link_url: "https://github.com/ashikhosenpro/espander".to_string(),
         show_github_icon: true,
     }
 }

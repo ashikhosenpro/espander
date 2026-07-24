@@ -2,84 +2,29 @@ use super::database::Database;
 use super::schema::Settings;
 use crate::error::EspanderError;
 use keyring::Entry;
-use std::fs;
-use std::path::PathBuf;
 
 const GITHUB_TOKEN_SERVICE: &str = "com.ashikhosen.espander";
 const GITHUB_TOKEN_ACCOUNT: &str = "github_token";
-const GITHUB_TOKEN_FALLBACK_FILE: &str = ".github_token";
-
-fn fallback_token_path() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .map_err(|_| "Cannot determine home directory".to_string())?;
-
-    Ok(PathBuf::from(home)
-        .join(".espander")
-        .join(GITHUB_TOKEN_FALLBACK_FILE))
-}
-
-fn set_fallback_token(token: &str) -> Result<(), String> {
-    let path = fallback_token_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    fs::write(&path, token).map_err(|e| e.to_string())?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = fs::metadata(&path)
-            .map_err(|e| e.to_string())?
-            .permissions();
-        permissions.set_mode(0o600);
-        fs::set_permissions(&path, permissions).map_err(|e| e.to_string())?;
-    }
-
-    Ok(())
-}
-
-fn get_fallback_token() -> Option<String> {
-    let path = fallback_token_path().ok()?;
-    let token = fs::read_to_string(path).ok()?.trim().to_string();
-    if token.is_empty() {
-        None
-    } else {
-        Some(token)
-    }
-}
-
-fn delete_fallback_token() {
-    if let Ok(path) = fallback_token_path() {
-        let _ = fs::remove_file(path);
-    }
-}
 
 pub fn set_secure_token(token: &str) -> Result<(), String> {
-    // Keep an app-private fallback even when the OS credential write reports
-    // success. Unsigned/ad-hoc desktop builds can successfully write a keychain
-    // entry and then be denied when a later process tries to read it.
-    set_fallback_token(token)?;
-
-    if let Ok(entry) = Entry::new(GITHUB_TOKEN_SERVICE, GITHUB_TOKEN_ACCOUNT) {
-        let _ = entry.set_password(token);
-    }
-    Ok(())
+    let entry =
+        Entry::new(GITHUB_TOKEN_SERVICE, GITHUB_TOKEN_ACCOUNT).map_err(|e| e.to_string())?;
+    entry.set_password(token).map_err(|e| e.to_string())
 }
 
 pub fn get_secure_token() -> Option<String> {
     Entry::new(GITHUB_TOKEN_SERVICE, GITHUB_TOKEN_ACCOUNT)
         .ok()
         .and_then(|entry| entry.get_password().ok())
-        .or_else(get_fallback_token)
 }
 
 pub fn delete_secure_token() -> Result<(), String> {
-    if let Ok(entry) = Entry::new(GITHUB_TOKEN_SERVICE, GITHUB_TOKEN_ACCOUNT) {
-        let _ = entry.delete_credential();
+    let entry =
+        Entry::new(GITHUB_TOKEN_SERVICE, GITHUB_TOKEN_ACCOUNT).map_err(|e| e.to_string())?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(error.to_string()),
     }
-    delete_fallback_token();
-    Ok(())
 }
 
 impl Database {

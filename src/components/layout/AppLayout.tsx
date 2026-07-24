@@ -18,7 +18,7 @@ import { useGlobalTextStore } from "@/stores/useGlobalTextStore";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { openBrowser, readFooterSettings, registerAppInstall, type FooterSettings } from "@/lib/tauri";
+import { openBrowser, readFooterSettings, type FooterSettings } from "@/lib/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AlertTriangle,
@@ -38,9 +38,9 @@ export function AppLayout() {
   const { fetchTools } = useToolsStore();
   const { fetchTexts } = useGlobalTextStore();
   const [footerSettings, setFooterSettings] = useState<FooterSettings>({
-    left_text: "Espander v0.1.0 · MIT License",
+    left_text: "Espander v0.1.1 · MIT License",
     link_label: "GitHub",
-    link_url: "https://github.com/ashikhosenpro/Expander",
+    link_url: "https://github.com/ashikhosenpro/espander",
     show_github_icon: true,
   });
 
@@ -102,24 +102,6 @@ export function AppLayout() {
     const preventContextMenu = (event: MouseEvent) => event.preventDefault();
     document.addEventListener("contextmenu", preventContextMenu);
     return () => document.removeEventListener("contextmenu", preventContextMenu);
-  }, []);
-
-  useEffect(() => {
-    const deviceKey = "espander_device_id";
-    const pingKey = "espander_install_ping_date";
-    let deviceId = localStorage.getItem(deviceKey);
-
-    if (!deviceId) {
-      deviceId = crypto.randomUUID();
-      localStorage.setItem(deviceKey, deviceId);
-    }
-
-    const today = new Date().toISOString().split("T")[0];
-    if (localStorage.getItem(pingKey) !== today) {
-      registerAppInstall(deviceId)
-        .then(() => localStorage.setItem(pingKey, today))
-        .catch((error) => console.error("Failed to register app install:", error));
-    }
   }, []);
 
   const espansoMissing = useMemo(() => {

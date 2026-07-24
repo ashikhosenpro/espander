@@ -1,10 +1,10 @@
 [package]
 name = "espander"
-version = "0.1.0"
+version = "0.1.1"
 description = "Visual manager and sync companion for Espanso"
 authors = ["ASHIK HOSEN"]
 license = "MIT"
-repository = "https://github.com/ashikhosenpro/Expander"
+repository = "https://github.com/ashikhosenpro/espander"
 homepage = "https://ashikhosen.com"
 edition = "2021"
 
@@ -32,3 +32,7 @@ base64 = "0.22"
 tempfile = "3"
 keyring = "3"
 shellexpand = "3"
+tauri-plugin-autostart = "2"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

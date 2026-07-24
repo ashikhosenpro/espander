@@ -10,6 +10,8 @@ src-tauri/target/**/*
 *.dmg
 *.msi
 *.exe
+*.pkg
+*.app/
 *.AppImage
 *.deb
 *.rpm
@@ -23,6 +25,9 @@ src-tauri/target/**/*
 *.pem
 *.key
 *.p12
+*.pfx
+*.cer
+*.crt
 *.mobileprovision
 
 # Private production control hub (not part of the open-source desktop app)

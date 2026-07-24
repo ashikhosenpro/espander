@@ -29,7 +29,6 @@ import {
   readAboutPage,
   readDocsPage,
   openBrowser,
-  openPermissionSettings,
   testGithubConnection,
   startGitHubOAuth,
   pollGitHubOAuth,
@@ -38,6 +37,11 @@ import {
 } from "@/lib/tauri";
 import type { PermissionCheck, GitHubRepo } from "@/types";
 import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import {
+  disable as disableAutostart,
+  enable as enableAutostart,
+  isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart";
 import {
   Settings,
   Terminal,
@@ -65,6 +69,7 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
+  Power,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUpdateStore } from "@/stores/useUpdateStore";
@@ -85,6 +90,9 @@ export function SettingsPage() {
   const [showGithubDocs, setShowGithubDocs] = useState(false);
   const [permissions, setPermissions] = useState<PermissionCheck[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [autostartLoading, setAutostartLoading] = useState(true);
+  const [autostartError, setAutostartError] = useState<string | null>(null);
   const [draggedCatId, setDraggedCatId] = useState<string | null>(null);
   const [dataMessage, setDataMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const { updater, currentVersion, isChecking, isUpdating, checkUpdates, installUpdate } = useUpdateStore();
@@ -334,6 +342,30 @@ export function SettingsPage() {
   useEffect(() => {
     refreshPermissions();
   }, [settings.espanso_config_dir]);
+
+  useEffect(() => {
+    isAutostartEnabled()
+      .then(setAutostartEnabled)
+      .catch((error) => setAutostartError(String(error)))
+      .finally(() => setAutostartLoading(false));
+  }, []);
+
+  const handleAutostartChange = async (enabled: boolean) => {
+    setAutostartLoading(true);
+    setAutostartError(null);
+    try {
+      if (enabled) {
+        await enableAutostart();
+      } else {
+        await disableAutostart();
+      }
+      setAutostartEnabled(await isAutostartEnabled());
+    } catch (error) {
+      setAutostartError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setAutostartLoading(false);
+    }
+  };
 
   useEffect(() => {
     readAboutPage().then(setAboutHtml);
@@ -607,6 +639,29 @@ export function SettingsPage() {
           </div>
 
           <div className="settings-panel rounded-xl border border-border bg-card p-5 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <Power className="mt-0.5 h-4 w-4 text-indigo-400" />
+                <div>
+                  <h3 className="text-sm font-medium">Start Espander with Windows</h3>
+                  <p className="mt-1 text-xs text-muted-foreground/75">
+                    Keep Espander available in the system tray after you sign in. The main window stays hidden until you open it.
+                  </p>
+                  {autostartError && (
+                    <p className="mt-1 text-xs text-red-400">{autostartError}</p>
+                  )}
+                </div>
+              </div>
+              <Switch
+                checked={autostartEnabled}
+                disabled={autostartLoading}
+                onCheckedChange={handleAutostartChange}
+                aria-label="Start Espander with Windows"
+              />
+            </div>
+          </div>
+
+          <div className="settings-panel rounded-xl border border-border bg-card p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-medium">Permissions</h3>
               <Button
@@ -657,19 +712,6 @@ export function SettingsPage() {
                         {permission.description}
                       </p>
                     </div>
-                    {permission.action_label && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1 text-xs flex-shrink-0"
-                        onClick={async () => {
-                          await openPermissionSettings(permission.id);
-                        }}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        {permission.action_label}
-                      </Button>
-                    )}
                   </div>
                 );
               })}
@@ -1456,7 +1498,7 @@ export function SettingsPage() {
                 <div className="space-y-1 text-right">
                   <span className="text-xs text-muted-foreground">Latest Available</span>
                   <p className="text-sm font-mono font-medium">
-                    {updater ? `v${updater.version}` : "v0.1.0"}
+                    {updater ? `v${updater.version}` : "v0.1.1"}
                   </p>
                 </div>
               </div>
@@ -1479,7 +1521,7 @@ export function SettingsPage() {
 
                   {localErrorMsg && (
                     <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-400 font-medium">
-                      Update failed: {localErrorMsg}
+                      Could not open the release page: {localErrorMsg}
                     </div>
                   )}
 
@@ -1493,12 +1535,12 @@ export function SettingsPage() {
                       {isUpdating ? (
                         <>
                           <div className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                          Installing Update...
+                          Opening Release Page...
                         </>
                       ) : (
                         <>
-                          <ArrowUpCircle className="h-4 w-4" />
-                          Update Automatically
+                          <ExternalLink className="h-4 w-4" />
+                          View Verified Release
                         </>
                       )}
                     </Button>
@@ -1516,7 +1558,7 @@ export function SettingsPage() {
                           className="w-full gap-2 border-indigo-500/30 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/5 text-xs h-9"
                         >
                           <ExternalLink className="h-4 w-4" />
-                          Download Latest Version (Manual)
+                          Open Release Page
                         </Button>
                       </a>
                     )}

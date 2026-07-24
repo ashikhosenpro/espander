@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import {
   checkUpdatesAndAnnouncements,
-  downloadAndInstallUpdate,
+  openBrowser,
   type Announcement,
   type UpdaterInfo
 } from "@/lib/tauri";
@@ -23,7 +23,7 @@ interface UpdateStore {
 export const useUpdateStore = create<UpdateStore>((set, get) => ({
   announcement: null,
   updater: null,
-  currentVersion: "0.1.0",
+  currentVersion: "0.1.1",
   isChecking: false,
   isUpdating: false,
   updateError: null,
@@ -55,15 +55,14 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
 
     set({ isUpdating: true, updateError: null });
     try {
-      await downloadAndInstallUpdate(updater.download_url);
+      await openBrowser(updater.github_releases_url);
       set({ isUpdating: false });
     } catch (err) {
-      console.error("Failed to install update:", err);
+      console.error("Failed to open release page:", err);
       set({
         isUpdating: false,
         updateError: err instanceof Error ? err.message : String(err)
       });
-      // Throw error to be caught by the component UI for fallback
       throw err;
     }
   }

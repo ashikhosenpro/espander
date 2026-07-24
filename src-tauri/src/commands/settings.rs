@@ -39,13 +39,28 @@ fn open_external_url(url: &str) -> Result<(), EspanderError> {
 
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        use std::iter;
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()?;
+        let operation: Vec<u16> = "open".encode_utf16().chain(iter::once(0)).collect();
+        let target: Vec<u16> = url.encode_utf16().chain(iter::once(0)).collect();
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                operation.as_ptr(),
+                target.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        if result as isize <= 32 {
+            return Err(EspanderError::Other(format!(
+                "Windows could not open the browser (ShellExecute error {}).",
+                result as isize
+            )));
+        }
     }
 
     #[cfg(target_os = "linux")]

@@ -98,83 +98,6 @@ fn platform_download_url(updater: &UpdaterInfo) -> String {
     updater.download_url.clone()
 }
 
-#[tauri::command]
-pub async fn download_and_install_update(download_url: String) -> Result<String, EspanderError> {
-    if !is_allowed_update_download(&download_url) {
-        return Err(EspanderError::Other(
-            "Update downloads are only allowed from the official release host.".to_string(),
-        ));
-    }
-
-    let client = reqwest::Client::builder()
-        .user_agent("Espander/0.1.0")
-        .build()
-        .map_err(|e| EspanderError::Other(format!("HTTP client error: {}", e)))?;
-
-    // Download the installer file
-    let resp = client
-        .get(&download_url)
-        .send()
-        .await
-        .map_err(|e| EspanderError::Other(format!("Failed to download update: {}", e)))?;
-
-    if !resp.status().is_success() {
-        return Err(EspanderError::Other(format!(
-            "Server returned status {}",
-            resp.status()
-        )));
-    }
-
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| EspanderError::Other(format!("Failed to read update bytes: {}", e)))?;
-
-    // Determine target filename from URL or default
-    let filename = download_url
-        .split('/')
-        .last()
-        .unwrap_or("espander-update.dmg");
-
-    // Save to temp directory
-    let temp_dir = std::env::temp_dir();
-    let temp_file_path = temp_dir.join(filename);
-
-    tokio::fs::write(&temp_file_path, bytes)
-        .await
-        .map_err(|e| EspanderError::Other(format!("Failed to write update file: {}", e)))?;
-
-    // Open/Execute the installer based on OS
-    open_installer(&temp_file_path)?;
-
-    Ok(format!("Update downloaded to {:?}", temp_file_path))
-}
-
-fn open_installer(path: &std::path::Path) -> Result<(), EspanderError> {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(path)
-            .spawn()
-            .map_err(|e| EspanderError::Other(format!("Failed to open installer: {}", e)))?;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(&["/C", "start", "", &path.to_string_lossy()])
-            .spawn()
-            .map_err(|e| EspanderError::Other(format!("Failed to run installer: {}", e)))?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(path)
-            .spawn()
-            .map_err(|e| EspanderError::Other(format!("Failed to open installer: {}", e)))?;
-    }
-    Ok(())
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Notification {
     pub id: String,
@@ -194,8 +117,6 @@ pub struct Notification {
     pub html_content: Option<String>,
     #[serde(default)]
     pub custom_css: Option<String>,
-    #[serde(default)]
-    pub custom_js: Option<String>,
     #[serde(default)]
     pub background_color: Option<String>,
     #[serde(default)]
@@ -262,11 +183,6 @@ pub struct GlobalTexts {
     pub more_tools_subtitle: String,
     pub notifications_title: String,
     pub notifications_subtitle: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DeviceRegistration {
-    pub device_id: String,
 }
 
 #[tauri::command]
@@ -390,61 +306,6 @@ fn global_texts_endpoint_url() -> Option<String> {
         .map(|url| url.trim().to_string())
         .filter(|url| !url.is_empty())
         .or_else(|| hub_base_url().map(|base| format!("{}/global-texts", base)))
-}
-
-fn is_allowed_update_download(download_url: &str) -> bool {
-    if download_url.starts_with("https://github.com/ashikhosenpro/Expander/releases/download/") {
-        return true;
-    }
-
-    let Ok(download) = reqwest::Url::parse(download_url) else {
-        return false;
-    };
-
-    if download.scheme() != "https" {
-        return false;
-    }
-
-    let Some(update_url) = updates_endpoint_url() else {
-        return false;
-    };
-
-    let Ok(update_endpoint) = reqwest::Url::parse(&update_url) else {
-        return false;
-    };
-
-    download.domain() == update_endpoint.domain()
-}
-
-#[tauri::command]
-pub async fn register_app_install(device_id: String) -> Result<(), EspanderError> {
-    let Some(url) = telemetry_endpoint_url() else {
-        return Ok(());
-    };
-
-    let client = reqwest::Client::builder()
-        .user_agent("Espander/0.1.0")
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map_err(|e| EspanderError::Other(format!("HTTP client error: {}", e)))?;
-
-    let payload = serde_json::json!({
-        "device_id": device_id,
-        "platform": std::env::consts::OS,
-        "version": env!("CARGO_PKG_VERSION"),
-    });
-
-    let _ = client.post(url).json(&payload).send().await;
-    Ok(())
-}
-
-fn telemetry_endpoint_url() -> Option<String> {
-    std::env::var("ESPANDER_TELEMETRY_URL")
-        .ok()
-        .or_else(|| option_env!("ESPANDER_TELEMETRY_URL").map(str::to_string))
-        .map(|url| url.trim().to_string())
-        .filter(|url| !url.is_empty())
-        .or_else(|| hub_base_url().map(|base| format!("{}/telemetry", base)))
 }
 
 fn hub_base_url() -> Option<String> {

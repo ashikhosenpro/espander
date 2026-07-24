@@ -54,9 +54,6 @@ export const openBrowser = (url: string) =>
 // Permissions
 export const getPermissionStatus = () =>
   invoke<PermissionCheck[]>("get_permission_status");
-export const openPermissionSettings = (permissionId: string) =>
-  invoke<void>("open_permission_settings", { permissionId });
-
 // Espanso
 export const detectEspanso = () => invoke<EspansoInfo>("detect_espanso");
 export const generateYaml = () => invoke<void>("generate_yaml");
@@ -143,9 +140,6 @@ export interface UpdateResponse {
 export const checkUpdatesAndAnnouncements = () =>
   invoke<UpdateResponse>("check_updates_and_announcements");
 
-export const downloadAndInstallUpdate = (downloadUrl: string) =>
-  invoke<string>("download_and_install_update", { downloadUrl });
-
 // Centralized Notifications
 export interface Notification {
   id: string;
@@ -158,7 +152,6 @@ export interface Notification {
   message: string;
   html_content: string | null;
   custom_css: string | null;
-  custom_js: string | null;
   background_color: string | null;
   text_color: string | null;
   action_label: string | null;
@@ -216,9 +209,6 @@ export interface GlobalTexts {
 
 export const fetchGlobalTexts = () =>
   invoke<GlobalTexts>("fetch_global_texts");
-
-export const registerAppInstall = (deviceId: string) =>
-  invoke<void>("register_app_install", { deviceId });
 
 export const moveSnippetsAndDeleteCategory = (fromId: string, toId: string) =>
   invoke<void>("move_snippets_and_delete_category", { fromId, toId });

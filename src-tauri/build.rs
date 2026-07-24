@@ -8,7 +8,6 @@ fn load_private_build_env() {
         "ESPANDER_NOTIFICATIONS_URL",
         "ESPANDER_UPDATES_URL",
         "ESPANDER_CONTENT_URL",
-        "ESPANDER_TELEMETRY_URL",
     ] {
         if let Some(value) = std::env::var(key)
             .ok()
@@ -22,7 +21,6 @@ fn load_private_build_env() {
     println!("cargo:rerun-if-env-changed=ESPANDER_NOTIFICATIONS_URL");
     println!("cargo:rerun-if-env-changed=ESPANDER_UPDATES_URL");
     println!("cargo:rerun-if-env-changed=ESPANDER_CONTENT_URL");
-    println!("cargo:rerun-if-env-changed=ESPANDER_TELEMETRY_URL");
     println!("cargo:rerun-if-changed=../.env.local");
     println!("cargo:rerun-if-changed=../.env");
 }

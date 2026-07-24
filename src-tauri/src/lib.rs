@@ -37,10 +37,13 @@ pub fn run() {
         eprintln!("Failed to initialize database: {}", e);
     }
 
-    let mut show_window_on_start = false;
+    let launched_from_autostart = std::env::args().any(|arg| arg == "--autostart");
+    let mut show_window_on_start = cfg!(target_os = "windows") && !launched_from_autostart;
 
     if let Ok(settings) = rt.block_on(database.get_settings()) {
-        show_window_on_start = !settings.first_launch_complete;
+        show_window_on_start =
+            (cfg!(target_os = "windows") && !launched_from_autostart)
+                || !settings.first_launch_complete;
         if !settings.espanso_auto_detected {
             if let Ok(info) = rt.block_on(espanso::detector::detect_espanso()) {
                 if info.found {
@@ -57,6 +60,12 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .app_name("Espander")
+                .args(["--autostart"])
+                .build(),
+        )
         .manage(database)
         .setup(move |app| {
             #[cfg(target_os = "macos")]
@@ -126,7 +135,6 @@ pub fn run() {
             commands::settings::update_settings,
             commands::settings::open_browser,
             commands::permissions::get_permission_status,
-            commands::permissions::open_permission_settings,
             commands::espanso::detect_espanso,
             commands::espanso::generate_yaml,
             commands::espanso::deploy_and_reload,
@@ -147,11 +155,9 @@ pub fn run() {
             commands::about::read_footer_settings,
             commands::import_export::export_snippets,
             commands::updater::check_updates_and_announcements,
-            commands::updater::download_and_install_update,
             commands::updater::fetch_notifications,
             commands::updater::fetch_hub_tools,
             commands::updater::fetch_global_texts,
-            commands::updater::register_app_install,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Espander");

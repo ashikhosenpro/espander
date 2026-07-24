@@ -21,11 +21,27 @@ function rewriteDocumentSelectors(css: string) {
 }
 
 function extractBodyHtml(html: string) {
-  if (!/<\/?(html|body|head|!doctype)\b/i.test(html)) {
-    return html;
-  }
-
   const documentValue = new DOMParser().parseFromString(html, "text/html");
+  documentValue
+    .querySelectorAll("script, base, object, embed, meta[http-equiv]")
+    .forEach((node) => node.remove());
+  documentValue.querySelectorAll("*").forEach((node) => {
+    Array.from(node.attributes).forEach((attribute) => {
+      if (/^on/i.test(attribute.name)) {
+        node.removeAttribute(attribute.name);
+      }
+      if (
+        (attribute.name === "href" || attribute.name === "src") &&
+        /^\s*(?:javascript|data\s*:\s*text\/html)/i.test(attribute.value)
+      ) {
+        node.removeAttribute(attribute.name);
+      }
+    });
+  });
+  documentValue.querySelectorAll("iframe").forEach((iframe) => {
+    iframe.removeAttribute("srcdoc");
+    iframe.setAttribute("sandbox", "");
+  });
   return documentValue.body.innerHTML;
 }
 
@@ -102,47 +118,12 @@ export function HtmlNotificationFrame({
     shadow.addEventListener("contextmenu", preventContextMenu, { capture: true });
     shadow.addEventListener("click", handleClick, { capture: true });
 
-    const scopedDocument = {
-      body: root,
-      documentElement: root,
-      getElementById: (id: string) => shadow.getElementById(id),
-      querySelector: (selectors: string) => shadow.querySelector(selectors),
-      querySelectorAll: (selectors: string) => shadow.querySelectorAll(selectors),
-      createElement: document.createElement.bind(document),
-      createTextNode: document.createTextNode.bind(document),
-      addEventListener: shadow.addEventListener.bind(shadow),
-      removeEventListener: shadow.removeEventListener.bind(shadow),
-    };
-
-    const runScript = (code: string | null | undefined) => {
-      const script = code?.trim();
-      if (!script) return;
-
-      try {
-        new Function("root", "host", "document", "window", script)(
-          root,
-          host,
-          scopedDocument,
-          window
-        );
-      } catch (error) {
-        console.error("Notification script failed:", error);
-      }
-    };
-
-    root.querySelectorAll("script").forEach((script) => {
-      runScript(script.textContent);
-      script.remove();
-    });
-    runScript(notification.custom_js);
-
     return () => {
       shadow.removeEventListener("contextmenu", preventContextMenu, { capture: true });
       shadow.removeEventListener("click", handleClick, { capture: true });
     };
   }, [
     notification.custom_css,
-    notification.custom_js,
     notification.html_content,
     onFrameClick,
     onLinkClick,
